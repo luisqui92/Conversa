@@ -1,5 +1,7 @@
 # Actualizar Conversa: acceso y guardado en servidor
 
+Para la siguiente etapa de conexión piloto de Instagram, ver [CONECTAR_INSTAGRAM.md](CONECTAR_INSTAGRAM.md). El resto de esta guía describe la etapa de acceso y almacenamiento, sin credenciales de proveedores.
+
 ## Qué añade
 
 Acceso por correo y contraseña, datos privados por usuario y persistencia SQLite en la VM. El editor y el simulador conservan su funcionamiento, pero sus datos se guardan en el servidor. Las conexiones a Meta/TikTok, IA, cobros y equipos compartidos siguen pendientes.

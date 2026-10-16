@@ -5,6 +5,7 @@
 *.key
 *service-account*.json
 *credentials*.json
+*.credentials.json
 *.sqlite*
 *.db
 *.db-*
