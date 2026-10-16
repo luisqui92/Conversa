@@ -21,6 +21,8 @@ El usuario ya instaló y comprobó Docker Engine y Compose en Ubuntu 24.04 x86_6
 
 Consulta [ACTUALIZAR_BACKEND.md](ACTUALIZAR_BACKEND.md). La nueva versión agrega la API interna y un volumen de SQLite. No publica el puerto de la API a internet: Caddy sirve HTTPS y deriva `/api/*` al servicio interno.
 
+Las páginas públicas de [privacidad](dist/privacidad/index.html), [condiciones](dist/terminos/index.html) y [eliminación de datos](dist/eliminar-datos/index.html) se sirven sin sesión. Consulta [CONFIGURAR_META.md](CONFIGURAR_META.md) para instalarlas y registrar sus URLs en la app nueva de Meta. La eliminación se solicita por correo y requiere gestión manual del operador.
+
 Una vez levantado el servicio, crear el primer usuario dentro de la VM:
 
 ```bash
@@ -48,6 +50,7 @@ Pasan los 56 casos originales y las nuevas pruebas de autenticación, aislamient
 - `compose.vm.yaml`, `Caddyfile.vm`, `deploy-vm.sh`: despliegue en Google Cloud VM.
 - `ACTUALIZAR_BACKEND.md`: actualización, creación de usuarios y operación.
 - `CONECTAR_INSTAGRAM.md`: credenciales privadas y primer receptor de eventos de Instagram.
+- `CONFIGURAR_META.md`: páginas públicas y campos de configuración básica de Meta.
 - `PUBLICAR_GOOGLE.md`: guía de la publicación inicial estática; para esta versión usar la guía de actualización.
 - `package.py`: genera una demo autónoma que sigue usando guardado local.
 

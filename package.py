@@ -22,6 +22,8 @@ assert html.count('<script') == html.count('</script>') == 1
 assert 'src="app.mjs"' not in html
 assert 'href="styles.css"' not in html
 assert 'href="campaigns.css"' not in html
+for legal_page in ['privacidad', 'terminos', 'eliminar-datos']:
+    html = html.replace(f'href="/{legal_page}/"', f'href="https://cc.chatgo.ia.bo/{legal_page}/"')
 (root / 'conversa-demo.html').write_text(html)
 
 with zipfile.ZipFile(root / 'conversa-demo.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
