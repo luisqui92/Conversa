@@ -36,7 +36,7 @@ En esa carpeta, ejecutar una sola vez por usuario:
 sudo docker compose -f compose.vm.yaml exec api node backend/admin.mjs create-user
 ```
 
-Escribir correo y una contraseña de al menos 12 caracteres, y repetirla cuando lo pida. No se muestran los caracteres de la contraseña. Si el usuario ya existe, el comando lo indica sin reemplazarlo.
+Escribir correo y una contraseña de al menos 10 caracteres, y repetirla cuando lo pida. No se muestran los caracteres de la contraseña. Si el usuario ya existe, el comando lo indica sin reemplazarlo.
 
 Abrir `https://cc.chatgo.ia.bo`, iniciar sesión y comprobar el indicador «Guardado en servidor». No escribir contraseñas en comandos, capturas o mensajes del chat.
 

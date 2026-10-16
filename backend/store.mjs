@@ -38,7 +38,7 @@ export function openStore(path, { now = Date.now } = {}) {
   const dummyHash = scryptSync('not-a-real-password', dummySalt, 64);
   function setPassword(email, password, create = false) {
     email = String(email).trim().toLowerCase();
-    if (!validEmail(email) || typeof password !== 'string' || password.length < 12 || password.length > 256) throw new Error('Usa un correo válido y una contraseña de 12 a 256 caracteres.');
+    if (!validEmail(email) || typeof password !== 'string' || password.length < 10 || password.length > 256) throw new Error('Usa un correo válido y una contraseña de 10 a 256 caracteres.');
     const salt = randomBytes(16).toString('hex');
     const hash = scryptSync(password, salt, 64).toString('hex');
     db.exec('BEGIN IMMEDIATE');

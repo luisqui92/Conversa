@@ -27,7 +27,7 @@ Una vez levantado el servicio, crear el primer usuario dentro de la VM:
 sudo docker compose -f compose.vm.yaml exec api node backend/admin.mjs create-user
 ```
 
-Solicita el correo y la contraseña dos veces. La contraseña se introduce oculta y requiere al menos 12 caracteres. No hay contraseña predeterminada ni registro público. No se requieren credenciales de Meta para esta etapa.
+Solicita el correo y la contraseña dos veces. La contraseña se introduce oculta y requiere al menos 10 caracteres. No hay contraseña predeterminada ni registro público. No se requieren credenciales de Meta para esta etapa.
 
 ## Comprobar
 

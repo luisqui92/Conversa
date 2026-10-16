@@ -32,7 +32,7 @@ function secret(prompt) {
     process.stdin.on('keypress', keypress);
   });
 }
-const password = await secret('Contraseña nueva (mínimo 12 caracteres; no se muestra): ');
+const password = await secret('Contraseña nueva (mínimo 10 caracteres; no se muestra): ');
 const confirm = await secret('Repetir contraseña: ');
 if (password !== confirm) { console.error('Las contraseñas no coinciden.'); process.exit(2); }
 const store = openStore(process.env.DATABASE_PATH || '/data/conversa.sqlite');
