@@ -1,3 +1,5 @@
+> Versión actual: para acceso por usuario y guardado en servidor, seguir [ACTUALIZAR_BACKEND.md](ACTUALIZAR_BACKEND.md). El resto de esta guía documenta la instalación inicial estática.
+
 # Publicar Conversa en la VM de Google Cloud
 
 **Ruta actual elegida por el usuario:** una VM de Google Cloud para Conversa, con DNS en ClouDNS y dominio `cc.chatgo.ia.bo`.

@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+*.zip
+*.sqlite*
+*.db*
+*.pem
+*.key
+*credentials*.json
+*service-account*.json
+backups
+node_modules
+__pycache__
+prospectos-bolivia.csv

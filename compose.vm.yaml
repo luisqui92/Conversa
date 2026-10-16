@@ -1,9 +1,35 @@
 name: conversa-demo
 
 services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ORIGIN: https://cc.chatgo.ia.bo
+      DATABASE_PATH: /data/conversa.sqlite
+    volumes:
+      - conversa_data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   web:
     image: caddy:2-alpine
     restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
@@ -23,3 +49,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  conversa_data:

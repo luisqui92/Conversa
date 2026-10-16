@@ -1,4 +1,9 @@
 cc.chatgo.ia.bo {
+    handle /api/* {
+        reverse_proxy api:8080
+    }
+
+    handle {
     root * /srv
     encode zstd gzip
 
@@ -12,4 +17,5 @@ cc.chatgo.ia.bo {
     header @modules Content-Type "text/javascript; charset=utf-8"
 
     file_server
+    }
 }

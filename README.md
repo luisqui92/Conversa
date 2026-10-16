@@ -1,63 +1,54 @@
 # Conversa
 
-Prototipo de ChatGo / Lukmi SRL para gestionar consultas de inmuebles por publicación en Instagram, Facebook y TikTok.
+Plataforma en desarrollo de ChatGo / Lukmi SRL para campañas por publicación y seguimiento de prospectos, con foco en inmobiliarias de Bolivia.
 
-**Los mensajes son simulados.** Esta versión no conecta cuentas sociales, no usa IA, no cobra suscripciones y no dispone de backend ni autenticación. Los datos se guardan en el navegador. Incluye ejemplos ficticios de venta, alquiler y anticrético, además de restaurantes.
+## Estado actual
 
-## Instalar en la VM de Google Cloud
+- Acceso por correo y contraseña, con usuarios creados desde la VM.
+- Sesiones de 12 horas con cookie Secure, HttpOnly y SameSite=Strict.
+- Campañas, conversaciones simuladas y prospectos guardados en SQLite en servidor, separados por usuario.
+- Control de versiones para evitar que una pestaña antigua sobrescriba cambios nuevos.
+- Importación opcional de la demo anterior del navegador, conservando su copia original.
+- Cada usuario tiene datos privados propios; equipos compartiendo una empresa y administración web de usuarios siguen pendientes.
 
-Requisitos: VM Linux con Docker Engine y el plugin Docker Compose. La VM preparada para este proyecto usa Ubuntu 24.04 x86_64; Docker ya fue comprobado por el usuario.
+**Los canales sociales siguen sin conectar.** Los comentarios y DMs se simulan con reglas; todavía no hay IA conectada, OAuth de proveedores, webhooks reales, Pixel activo ni cobros. Los planes y cuotas continúan siendo de prueba. La autenticación del servidor no convierte esas simulaciones en envíos reales.
 
-Desde SSH en la VM:
+## Actualizar la VM de Google Cloud
 
-```bash
-curl -fL https://github.com/luisqui92/Conversa/archive/refs/heads/main.zip -o conversa-github.zip
-unzip conversa-github.zip
-cd Conversa-main
-sudo docker compose -f compose.vm.yaml config --quiet
-```
+El usuario ya instaló y comprobó Docker Engine y Compose en Ubuntu 24.04 x86_64. El despliegue conserva el nombre de proyecto Compose `conversa-demo` para reutilizar los volúmenes de certificados y datos al cambiar de carpeta.
 
-Antes de arrancar, configurar el registro A `cc` de la zona `chatgo.ia.bo` en ClouDNS con la IP pública real de la VM y comprobar que llegan TCP 80 y 443. Conviene mantener una IP externa estática. No hay una IP preconfigurada en este repositorio.
+Consulta [ACTUALIZAR_BACKEND.md](ACTUALIZAR_BACKEND.md). La nueva versión agrega la API interna y un volumen de SQLite. No publica el puerto de la API a internet: Caddy sirve HTTPS y deriva `/api/*` al servicio interno.
 
-Para consultar la IP desde la VM de Google Cloud:
-
-```bash
-curl -fsS -H "Metadata-Flavor: Google" \
-  http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip
-printf '\n'
-```
-
-Cuando DNS y firewall estén listos:
+Una vez levantado el servicio, crear el primer usuario dentro de la VM:
 
 ```bash
-sudo bash deploy-vm.sh
-sudo docker compose -f compose.vm.yaml logs --tail=80 web
+sudo docker compose -f compose.vm.yaml exec api node backend/admin.mjs create-user
 ```
 
-El despliegue usa Caddy para servir `dist/` y solicitar HTTPS para `cc.chatgo.ia.bo`. El script valida la configuración antes de arrancar. El contenedor iniciado no confirma por sí solo que DNS y el certificado estén listos: comprobar `https://cc.chatgo.ia.bo` en un navegador.
+Solicita el correo y la contraseña dos veces. La contraseña se introduce oculta y requiere al menos 12 caracteres. No hay contraseña predeterminada ni registro público. No se requieren credenciales de Meta para esta etapa.
 
-## Archivos
+## Comprobar
 
-- `dist/`: HTML, estilos y módulos JavaScript de la aplicación.
-- `compose.vm.yaml`: servicio web y volúmenes persistentes de certificados.
-- `Caddyfile.vm`: dominio y configuración HTTP/HTTPS.
-- `deploy-vm.sh`: validación y arranque del despliegue en la VM.
-- `PUBLICAR_GOOGLE.md`: guía de publicación detallada.
-- `checks.mjs`: 56 comprobaciones del flujo simulado.
-- `package.py`: genera la demo autónoma para abrir sin instalación.
-
-Para verificar el motor, con Node instalado:
+Requiere Node 24 o superior, con `node:sqlite`:
 
 ```bash
 node checks.mjs
+node backend/checks.mjs
 ```
 
-Las comprobaciones del motor no prueban conexiones reales de redes sociales. La validación del contenedor y del certificado se debe completar en la VM.
+Pasan los 56 casos originales y las nuevas pruebas de autenticación, aislamiento, expiración, límites de acceso, persistencia, conflictos de guardado y cola de cambios del navegador. Las pruebas de rutas se ejecutan en proceso, sin sockets. No se verificó el contenedor ni la interfaz en un navegador desde este entorno.
 
-## Desarrollo local
+## Archivos principales
 
-```bash
-python3 -m http.server 8080 --directory dist
-```
+- `dist/`: interfaz, simulador y cliente de sesión/guardado.
+- `backend/`: servidor HTTP, base SQLite, administración local y copia de seguridad.
+- `compose.vm.yaml`, `Caddyfile.vm`, `deploy-vm.sh`: despliegue en Google Cloud VM.
+- `ACTUALIZAR_BACKEND.md`: actualización, creación de usuarios y operación.
+- `PUBLICAR_GOOGLE.md`: guía de la publicación inicial estática; para esta versión usar la guía de actualización.
+- `package.py`: genera una demo autónoma que sigue usando guardado local.
 
-Abrir `http://localhost:8080`. No hace falta instalar dependencias JavaScript para usar la aplicación estática.
+## Modo local y datos
+
+`dist/index.html` usa el backend por defecto y no vuelve silenciosamente a guardar en el navegador si la API falla. Con `python3 package.py` se genera `conversa-demo.html` con modo local explícito para demostraciones sin servidor.
+
+En servidor, SQLite vive en el volumen `conversa-demo_conversa_data`. No guardar bases de datos, contraseñas, tokens ni respaldos en GitHub. La cuenta de la app se administra desde la VM; recuperar activos de Meta y obtener permisos de su API son procesos distintos.

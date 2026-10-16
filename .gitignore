@@ -5,9 +5,14 @@
 *.key
 *service-account*.json
 *credentials*.json
+*.sqlite*
+*.db
+*.db-*
+backups/
 node_modules/
 .DS_Store
 __pycache__/
 *.zip
 *.log
 conversa-campanas-y-conversaciones.json
+conversa-respaldo*
