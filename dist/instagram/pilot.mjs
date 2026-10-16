@@ -1,3 +1,5 @@
+const channel = document.documentElement.dataset.channel === 'facebook' ? 'facebook' : 'instagram';
+const network = channel === 'facebook' ? 'Facebook' : 'Instagram';
 const status = document.querySelector('#status');
 const refresh = document.querySelector('#refresh');
 const content = document.querySelector('#content');
@@ -32,12 +34,12 @@ async function update() {
   if (refresh.disabled) return;
   refresh.disabled = true;
   try {
-    const [account, report] = await Promise.all([get('/api/integrations/instagram'), get('/api/integrations/instagram/automation')]);
+    const [account, report] = await Promise.all([get(`/api/integrations/${channel}`), get(`/api/integrations/${channel}/automation`)]);
     content.hidden = false;
-    document.querySelector('#account').textContent = account.configured ? `@${account.username} · ${account.receivedEvents} entradas recibidas · ${account.mode === 'comment-then-dm' ? 'Automatización por publicación activada' : 'Recepción de eventos'}` : 'Esta cuenta de Conversa no tiene una conexión de Instagram configurada.';
+    document.querySelector('#account').textContent = account.configured ? `${channel === 'instagram' ? '@' : ''}${account.username} · ${account.receivedEvents} entradas recibidas · ${account.mode === 'comment-then-dm' ? 'Automatización por publicación activada' : 'Recepción de eventos'}` : `Esta cuenta de Conversa no tiene una conexión de ${network} configurada.`;
     table('#rules', ['Publicación', 'Estado', 'Respuesta pública', 'Mensaje privado'], report.rules.map(rule => [rule.media_id, rule.enabled ? 'Activa' : 'Pausada', rule.public_text, rule.dm_text]));
     table('#actions', ['Comentario', 'Resultado', 'Actualizado'], report.actions.map(action => {
-      const info = document.createElement('span'); info.textContent = labels[action.status] || action.status;
+      const info = document.createElement('span'); info.textContent = (labels[action.status] || action.status).replaceAll('Instagram', network);
       if (action.last_error) { const detail = document.createElement('small'); detail.className = 'detail warning'; detail.textContent = action.last_error; info.append(detail); }
       if (action.public_id) { const detail = document.createElement('small'); detail.className = 'detail'; detail.textContent = 'Respuesta pública confirmada'; info.append(detail); }
       if (action.message_id) { const detail = document.createElement('small'); detail.className = 'detail'; detail.textContent = 'Mensaje privado confirmado'; info.append(detail); }

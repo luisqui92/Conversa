@@ -33,7 +33,9 @@ export function openStore(path, { now = Date.now } = {}) {
     CREATE TABLE IF NOT EXISTS states (user_id TEXT PRIMARY KEY REFERENCES users(id), revision INTEGER NOT NULL, body TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS login_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, until_at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS instagram_events (hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), received_at INTEGER NOT NULL, body TEXT NOT NULL);
-    CREATE INDEX IF NOT EXISTS instagram_events_owner_time ON instagram_events(user_id, received_at);`);
+    CREATE INDEX IF NOT EXISTS instagram_events_owner_time ON instagram_events(user_id, received_at);
+    CREATE TABLE IF NOT EXISTS facebook_events (hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), received_at INTEGER NOT NULL, body TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS facebook_events_owner_time ON facebook_events(user_id, received_at);`);
   const dummySalt = '00000000000000000000000000000000';
   const dummyHash = scryptSync('not-a-real-password', dummySalt, 64);
   function setPassword(email, password, create = false) {
@@ -72,6 +74,25 @@ export function openStore(path, { now = Date.now } = {}) {
     },
     instagramEventCount(userId) {
       return db.prepare('SELECT count(*) AS count FROM instagram_events WHERE user_id=? AND received_at>?').get(userId, now() - 7 * 86400_000).count;
+    },
+    facebookEventCount(userId) {
+      return db.prepare('SELECT count(*) AS count FROM facebook_events WHERE user_id=? AND received_at>?').get(userId, now() - 7 * 86400_000).count;
+    },
+    recordFacebookEntries(userId, entries) {
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        db.prepare('DELETE FROM facebook_events WHERE received_at<=?').run(now() - 7 * 86400_000);
+        for (const entry of entries) {
+          const body = JSON.stringify(entry);
+          db.prepare('INSERT OR IGNORE INTO facebook_events VALUES (?,?,?,?)').run(digest(userId + ':' + body), userId, now(), body);
+        }
+        db.prepare('DELETE FROM facebook_events WHERE user_id=? AND hash NOT IN (SELECT hash FROM facebook_events WHERE user_id=? ORDER BY received_at DESC,rowid DESC LIMIT 2000)').run(userId, userId);
+        db.exec('COMMIT');
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
+    },
+    readFacebookEvents(userId) {
+      return db.prepare('SELECT received_at,body FROM facebook_events WHERE user_id=? AND received_at>? ORDER BY received_at DESC,rowid DESC LIMIT 20')
+        .all(userId, now() - 7 * 86400_000).map(row => ({ receivedAt: row.received_at, entry: JSON.parse(row.body) }));
     },
     recordInstagramEntries(userId, entries) {
       db.exec('BEGIN IMMEDIATE');
