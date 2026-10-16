@@ -19,7 +19,7 @@ for conversa_required_file in dist/index.html Caddyfile.vm compose.vm.yaml backe
 done
 
 printf '%s\n' 'Destino: esta VM. Dominio: cc.chatgo.ia.bo. Puertos necesarios: TCP 80 y 443.'
-printf '%s\n' 'Se publicará Conversa con acceso por usuario y guardado en servidor. Instagram requiere configuración adicional; recepción solamente.'
+printf '%s\n' 'Se publicará Conversa con acceso por usuario y guardado en servidor. Instagram requiere configurar y activar reglas por publicación.'
 
 docker compose -f compose.vm.yaml config --quiet
 docker compose -f compose.vm.yaml build api

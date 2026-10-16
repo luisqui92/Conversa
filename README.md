@@ -13,7 +13,7 @@ Plataforma en desarrollo de ChatGo / Lukmi SRL para campañas por publicación y
 
 Se incluye un receptor de webhooks de Instagram y un asistente de configuración desde la VM para una cuenta profesional de prueba: [CONECTAR_INSTAGRAM.md](CONECTAR_INSTAGRAM.md). Requiere instalar esta versión, introducir credenciales y configurar Meta. No conecta automáticamente las cuentas.
 
-**Los comentarios y DMs de la interfaz siguen siendo simulados.** El receptor permite registrar eventos firmados, pero no envía respuestas ni los sincroniza aún con la bandeja. Todavía no hay IA conectada, OAuth para clientes, Pixel activo ni cobros. Los planes y cuotas continúan siendo de prueba.
+**Los comentarios y DMs de la interfaz siguen siendo simulados.** El receptor registra eventos firmados. Un piloto separado puede responder primero al comentario y luego enviar un DM al activar una regla para una publicación desde la VM. No sincroniza estos resultados con la bandeja de demostración. Ver [AUTOMATIZAR_INSTAGRAM.md](AUTOMATIZAR_INSTAGRAM.md) y `/instagram/` para su activación y seguimiento. Todavía no hay IA conectada, OAuth para clientes, Pixel activo ni cobros. Los planes y cuotas continúan siendo de prueba.
 
 ## Actualizar la VM de Google Cloud
 
@@ -39,6 +39,7 @@ Requiere Node 24 o superior, con `node:sqlite`:
 node checks.mjs
 node backend/checks.mjs
 node backend/instagram-checks.mjs
+node backend/instagram-automation-checks.mjs
 ```
 
 Pasan los 56 casos originales y las nuevas pruebas de autenticación, aislamiento, expiración, límites de acceso, persistencia, conflictos de guardado y cola de cambios del navegador. Las pruebas de rutas se ejecutan en proceso, sin sockets. No se verificó el contenedor ni la interfaz en un navegador desde este entorno.
@@ -51,6 +52,7 @@ Pasan los 56 casos originales y las nuevas pruebas de autenticación, aislamient
 - `ACTUALIZAR_BACKEND.md`: actualización, creación de usuarios y operación.
 - `CONECTAR_INSTAGRAM.md`: credenciales privadas y primer receptor de eventos de Instagram.
 - `CONFIGURAR_META.md`: páginas públicas y campos de configuración básica de Meta.
+- `AUTOMATIZAR_INSTAGRAM.md`: regla piloto por publicación, orden público → DM, pausa y diagnóstico.
 - `PUBLICAR_GOOGLE.md`: guía de la publicación inicial estática; para esta versión usar la guía de actualización.
 - `package.py`: genera una demo autónoma que sigue usando guardado local.
 

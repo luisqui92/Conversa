@@ -3,8 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { resolve, dirname, join } from 'node:path';
 import { openStore } from './store.mjs';
 import { equalSecret, readInstagram, validSignature, rawBody } from './instagram-connection.mjs';
+import { openInstagramAutomation, createInstagramWorker } from './instagram-automation.mjs';
 
-export function makeServer({ store, origin = 'https://cc.chatgo.ia.bo', instagram = () => null }) {
+export function makeServer({ store, origin = 'https://cc.chatgo.ia.bo', instagram = () => null, automation = null }) {
   const allowedOrigin = new URL(origin).origin;
   if (!allowedOrigin.startsWith('https://')) throw new Error('APP_ORIGIN debe usar HTTPS.');
   function send(res, code, value, headers = {}) {
@@ -56,6 +57,7 @@ export function makeServer({ store, origin = 'https://cc.chatgo.ia.bo', instagra
         if (!payload || payload.object !== 'instagram' || !Array.isArray(payload.entry) || payload.entry.length > 100) return send(res, 400, { error: 'Evento de Instagram no válido.' });
         const entries = payload.entry.filter(entry => entry && String(entry.id) === config.accountId);
         store.recordInstagramEntries(config.ownerId, entries);
+        automation?.enqueue(config, entries);
         return send(res, 200, { ok: true });
       }
       if (!['GET', 'POST', 'PUT'].includes(req.method)) return send(res, 405, { error: 'Método no permitido.' }, { Allow: 'GET, POST, PUT' });
@@ -78,9 +80,11 @@ export function makeServer({ store, origin = 'https://cc.chatgo.ia.bo', instagra
       if (req.method === 'GET' && path === '/api/integrations/instagram') {
         const config = instagram();
         if (!config || config.ownerId !== user.id) return send(res, 200, { configured: false });
-        return send(res, 200, { configured: true, username: config.username, accountId: config.accountId, checkedAt: config.checkedAt, receivedEvents: store.instagramEventCount(user.id), mode: 'receive-only' });
+        const active = automation?.report(user.id).rules.some(rule => rule.enabled && rule.account_id === config.accountId);
+        return send(res, 200, { configured: true, username: config.username, accountId: config.accountId, checkedAt: config.checkedAt, receivedEvents: store.instagramEventCount(user.id), mode: active ? 'comment-then-dm' : 'receive-only' });
       }
       if (req.method === 'GET' && path === '/api/integrations/instagram/events') return send(res, 200, { events: store.readInstagramEvents(user.id) });
+      if (req.method === 'GET' && path === '/api/integrations/instagram/automation') return send(res, 200, automation?.report(user.id) || { rules: [], actions: [] });
       if (req.method === 'GET' && path === '/api/session') return send(res, 200, { user });
       if (req.method === 'POST' && path === '/api/logout') {
         store.logout(token(req));
@@ -109,8 +113,12 @@ export function makeServer({ store, origin = 'https://cc.chatgo.ia.bo', instagra
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const database = process.env.DATABASE_PATH || '/data/conversa.sqlite';
   const store = openStore(database);
+  const automation = openInstagramAutomation(database);
   const configPath = process.env.INSTAGRAM_CONFIG_PATH || join(dirname(database), 'instagram.credentials.json');
-  const server = makeServer({ store, origin: process.env.APP_ORIGIN || 'https://cc.chatgo.ia.bo', instagram: () => readInstagram(configPath) });
+  const instagram = () => readInstagram(configPath);
+  const worker = createInstagramWorker({ automation, instagram, onError: message => console.error(message) });
+  const server = makeServer({ store, origin: process.env.APP_ORIGIN || 'https://cc.chatgo.ia.bo', instagram, automation });
   server.listen(Number(process.env.PORT || 8080), '0.0.0.0', () => console.log('Conversa API lista.'));
-  process.on('SIGTERM', () => server.close(() => { store.close(); process.exit(0); }));
+  worker.start();
+  process.on('SIGTERM', () => server.close(async () => { await worker.stop(); automation.close(); store.close(); process.exit(0); }));
 }

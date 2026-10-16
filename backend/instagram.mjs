@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { openStore } from './store.mjs';
 import { inspectInstagramToken, readInstagram, writeInstagram } from './instagram-connection.mjs';
+import { openInstagramAutomation } from './instagram-automation.mjs';
 
 const command = process.argv[2];
 if (!['setup', 'status'].includes(command)) {
@@ -37,7 +38,15 @@ try {
   if (command === 'status') {
     const config = readInstagram(path);
     if (!config) console.log('Instagram todavía no está configurado.');
-    else console.log(`Cuenta: @${config.username}\nPropietario en Conversa: ${config.ownerEmail}\nValidada: ${config.checkedAt}\nEventos recibidos: ${store.instagramEventCount(config.ownerId)}\nRecepción solamente; automatizaciones reales pendientes.`);
+    else {
+      const automation = openInstagramAutomation(database);
+      try {
+        const report = automation.report(config.ownerId);
+        const active = report.rules.filter(rule => rule.enabled && rule.account_id === config.accountId).length;
+        console.log(`Cuenta: @${config.username}\nPropietario en Conversa: ${config.ownerEmail}\nValidada: ${config.checkedAt}\nEventos recibidos: ${store.instagramEventCount(config.ownerId)}\nReglas activas: ${active}\nModo: ${active ? 'Comentario público → DM (solo publicaciones configuradas).' : 'Recepción solamente.'}`);
+        for (const action of report.actions.slice(0, 5)) console.log(`Comentario ${action.comment_id}: ${action.status}${action.last_error ? ' — ' + action.last_error : ''}`);
+      } finally { automation.close(); }
+    }
   } else {
     if (!process.stdin.isTTY) throw new Error('Ejecuta en una terminal interactiva; las credenciales se introducen ocultas.');
     const email = await ask('Correo con el que inicias sesión en Conversa: ');
@@ -59,7 +68,7 @@ try {
     console.log(`URL de devolución de llamada: ${origin}/api/webhooks/instagram`);
     console.log(`Token de verificación: ${config.verifyToken}`);
     console.log('Copia esos dos valores en el apartado de webhooks de Meta. No compartas esta salida.');
-    console.log('El receptor registra eventos firmados de esta cuenta. Todavía NO envía comentarios ni DMs.');
+    console.log('El receptor registra eventos firmados. Los envíos requieren activar una regla con backend/instagram-rule.mjs.');
   }
 } catch (error) {
   // Do not print provider bodies, URLs, config contents or raw network exceptions.

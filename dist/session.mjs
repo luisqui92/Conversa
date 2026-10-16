@@ -80,7 +80,8 @@ export async function openConversaSession() {
   const saved = document.createElement('span'); saved.className = 'account-save'; saved.textContent = 'Guardado en servidor'; saved.setAttribute('role', 'status');
   const again = document.createElement('button'); again.className = 'text-btn'; again.textContent = 'Reintentar guardado'; again.hidden = true;
   const logout = document.createElement('button'); logout.className = 'btn'; logout.textContent = 'Cerrar sesión';
-  tools.append(identity, saved, again, logout);
+  const instagram = document.createElement('a'); instagram.href = '/instagram/'; instagram.textContent = 'Instagram: actividad real';
+  tools.append(identity, instagram, saved, again, logout);
   document.querySelector('.topbar').after(tools);
   const queue = createSaveQueue({ revision: loaded.revision, transport: async (payload, revision) => request('/api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': `"${revision}"` }, body: payload }), status(message, state, code) {
     saved.textContent = code === 401 ? 'Sesión vencida. Exporta tus cambios antes de volver a entrar.' : message;

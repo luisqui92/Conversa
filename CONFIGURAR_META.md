@@ -1,6 +1,6 @@
 # Páginas públicas para la configuración de Meta
 
-Las páginas de privacidad, condiciones y eliminación son archivos públicos dentro de `dist/`. No requieren sesión de Conversa. Describen el funcionamiento actual del piloto, no funciones futuras como DMs automáticos, Pixel o suscripciones activas. Se utiliza Lukmi SRL como responsable y el correo de contacto mostrado por el usuario en la configuración de la app: `luisquirogamaita@gmail.com`.
+Las páginas de privacidad, condiciones y eliminación son archivos públicos dentro de `dist/`. No requieren sesión de Conversa. Describen el funcionamiento actual del piloto, incluidas respuestas públicas y DM cuando se activa una regla por publicación desde la VM. Pixel y suscripciones activas siguen pendientes. Se utiliza Lukmi SRL como responsable y el correo de contacto mostrado por el usuario en la configuración de la app: `luisquirogamaita@gmail.com`.
 
 ## Instalar en la VM existente
 
@@ -45,4 +45,4 @@ Guardar los cambios y volver a Publicar para ver los requisitos restantes. Regis
 
 El usuario confirmó cuenta profesional y evaluador aceptado. El asistente de la VM validó el token y guardó credenciales; Meta aceptó la verificación del webhook. La suscripción de cuenta está activada y los campos `comments` y `messages` aparecen suscritos en v26.0. El panel informó que la prueba manual de `comments` fue correcta. Tras un comentario nuevo en una publicación antigua, el contador seguía en cero. Esa prueba manual puede llevar un ID ficticio que el receptor descarta; no demuestra recepción de eventos reales.
 
-La app aparece Sin publicar y el panel señaló la URL de privacidad pendiente. Se está resolviendo ese requisito, pero todavía no se comprobó que sea la única causa de la falta de eventos. Después de completar los requisitos y revisar el estado de acceso, hay que repetir la prueba real y comprobar el contador. Los DMs y las respuestas automáticas siguen pendientes.
+La app aparece Sin publicar y el panel señaló la URL de privacidad pendiente. Se está resolviendo ese requisito, pero todavía no se comprobó que sea la única causa de la falta de eventos. Después de completar los requisitos y revisar el estado de acceso, hay que repetir la prueba real y comprobar el contador. La posterior activación de respuestas públicas y DM del piloto se documenta en AUTOMATIZAR_INSTAGRAM.md.

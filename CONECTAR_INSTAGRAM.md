@@ -1,5 +1,7 @@
 # Instagram: primera conexión y recepción de eventos
 
+Esta guía describe la etapa de recepción. Después de comprobarla, el piloto de respuestas públicas y DM se activa por separado siguiendo [AUTOMATIZAR_INSTAGRAM.md](AUTOMATIZAR_INSTAGRAM.md). Los apartados que dicen recepción solamente describen la conexión antes de activar reglas.
+
 Esta etapa conecta UNA cuenta profesional de prueba con UN usuario de Conversa. Valida el token con Instagram y prepara un receptor de webhooks. No implementa OAuth para clientes, envíos de DMs, respuestas a comentarios, calendario de publicaciones ni sincronización con la bandeja del simulador. Las seis opciones seleccionadas en Meta no sustituyen la revisión de permisos.
 
 ## Actualizar la VM
