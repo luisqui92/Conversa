@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*service-account*.json
+*credentials*.json
+node_modules/
+.DS_Store
+__pycache__/
+*.zip
+*.log
+conversa-campanas-y-conversaciones.json
