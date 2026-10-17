@@ -55,6 +55,7 @@ Pasan los 56 casos originales y las nuevas pruebas de autenticación, aislamient
 - `CONFIGURAR_META.md`: páginas públicas y campos de configuración básica de Meta.
 - `AUTOMATIZAR_INSTAGRAM.md`: regla piloto por publicación, orden público → DM, pausa y diagnóstico.
 - `CONECTAR_FACEBOOK.md`: token de página, webhook de Page y flujo de comentario a Messenger.
+- `RENOVAR_FACEBOOK.md`: intercambio para obtener una autorización duradera y comprobación de vigencia.
 - `PUBLICAR_GOOGLE.md`: guía de la publicación inicial estática; para esta versión usar la guía de actualización.
 - `package.py`: genera una demo autónoma que sigue usando guardado local.
 

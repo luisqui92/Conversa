@@ -2,6 +2,10 @@
 
 Se conecta una página de Facebook a un usuario de Conversa, con credenciales, eventos y reglas separados de Instagram. La primera página elegida por el usuario es **LUKMI SRL Innovación y Tecnología**, ID **309667913276491**. La consulta de páginas autorizadas mostró MODERATE, MESSAGING y MANAGE, entre otras tareas; eso permite avanzar a la prueba, pero no acredita todos los permisos efectivos ni la aprobación para clientes externos.
 
+Si la conexión existente dejó de responder con código 190, usar
+[RENOVAR_FACEBOOK.md](RENOVAR_FACEBOOK.md). El nuevo asistente amplía la autorización
+de usuario antes de obtener el token de página y consulta la caducidad con Meta.
+
 ## Instalar la actualización en la VM existente
 
 ```bash
@@ -24,7 +28,7 @@ El asistente solicita:
 2. El token de **USUARIO** generado en el Explorador de Graph para la app nueva Conversa, con los permisos de páginas y Messenger ya concedidos. Se pega oculto. Se consulta `/me/accounts` por el servidor, se elige únicamente el ID solicitado y se valida su token mediante `/me`. Se admiten las primeras 100 páginas de esa respuesta.
 3. La clave secreta de la app de Meta **Conversa → Configuración de la app → Básica**. Se pega oculta. No utilizar la clave específica de la app de Instagram ni las claves de otras apps del usuario.
 
-El token de usuario solo se utiliza en memoria para obtener el token de página. Se conserva el token de página y su identidad en `/data/facebook.credentials.json`, con permiso 600. No hay cifrado de ese archivo por la aplicación; los administradores de la VM pueden acceder a él. No se imprime ni devuelve por la API. Los archivos de Instagram y Facebook son distintos y quedan fuera del contenido web y de GitHub.
+El token de usuario se amplía primero por el servidor y luego obtiene el token de página. Los dos tokens de usuario solo se utilizan en memoria. Meta debe confirmar tipo, app, página y caducidad antes de guardar. Se conserva el token de página, su identidad y diagnóstico en `/data/facebook.credentials.json`, con permiso 600. No hay cifrado de ese archivo por la aplicación; los administradores de la VM pueden acceder a él. No se imprime ni devuelve por la API. Los archivos de Instagram y Facebook son distintos y quedan fuera del contenido web y de GitHub.
 
 ## Configurar el webhook de Facebook en Meta
 
@@ -98,10 +102,9 @@ ni repite los mensajes del historial. Se mantiene el orden solicitud pública co
 → solicitud de privado, con deduplicación y detención ante errores.
 
 En la VM, la herramienta de prueba separada obtuvo `message_tags` con el autor para
-una respuesta de LUKMI, usando su webhook guardado. Esto acredita la respuesta de Graph
-para ese caso; la aparición del enlace y la notificación se comprueban en Facebook.
-La captura posterior mostraba el texto habitual sin el marcador. La nueva plantilla
-debe instalarse y activarse para probarla en los siguientes comentarios. No se garantiza
+una respuesta de LUKMI, usando su webhook guardado. Después de activar la nueva
+plantilla, una captura del usuario mostró el nombre enlazado en azul dentro de la
+respuesta habitual. La notificación no se confirmó con esa captura. No se garantiza
 que todas las cuentas permitan la mención ni que Facebook entregue una alerta.
 
 Diagnóstico individual: [PROBAR_MENCION_FACEBOOK.md](PROBAR_MENCION_FACEBOOK.md).
@@ -116,7 +119,9 @@ Los eventos y tablas de reglas/acciones de Facebook están separados de los de I
 
 ## Referencias y pruebas
 
-El código utiliza Graph API v26.0, tokens en Authorization y estas operaciones:
+El código utiliza Graph API v26.0 y estas operaciones. Las llamadas de página llevan
+el token en Authorization; el intercambio y diagnóstico de credenciales se describen
+en [RENOVAR_FACEBOOK.md](RENOVAR_FACEBOOK.md#transporte-y-almacenamiento).
 
 - Obtener páginas: `GET /me/accounts?fields=id,name,access_token,tasks&limit=100`.
 - Comprobar token de página: `GET /me?fields=id,name`.
@@ -133,6 +138,7 @@ node backend/instagram-checks.mjs
 node backend/instagram-automation-checks.mjs
 node backend/facebook-checks.mjs
 node backend/facebook-mention-checks.mjs
+node backend/facebook-token-checks.mjs
 ```
 
-Pruebas locales correctas: 56 casos del simulador, 11 reportados de acceso/guardado, 10 de conexión Instagram, 17 de automatización Instagram, 17 de Facebook y 9 del diagnóstico de menciones. Proveedores externos simulados: no se utilizaron tokens reales ni se hicieron envíos desde este entorno. Las pruebas de rutas son en proceso. El usuario confirmó el piloto real de comentario y Messenger y un diagnóstico de mención reconocido por Graph; instalar y activar la plantilla con `{autor}` y comprobar su aspecto y notificación siguen pendientes en su VM.
+Pruebas locales correctas: 56 casos del simulador, 11 reportados de acceso/guardado, 10 de conexión Instagram, 17 de automatización Instagram, 17 de Facebook, 9 del diagnóstico de menciones y 10 de credenciales duraderas. Proveedores externos simulados: no se utilizaron tokens reales ni se hicieron envíos desde este entorno. Las pruebas de rutas son en proceso. El usuario confirmó el piloto real de comentario y Messenger y mostró la mención visible con `{autor}`. La renovación duradera y su caducidad informada siguen pendientes de validación real en la VM.

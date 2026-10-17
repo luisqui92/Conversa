@@ -119,7 +119,7 @@ test('Webhook de Page, reglas y Messenger aislados de Instagram',async t=>{
       assert.deepEqual(JSON.parse((await get('/api/integrations/facebook',b)).body),{configured:false});
       assert.deepEqual(JSON.parse((await get('/api/integrations/facebook/events',b)).body),{events:[]});
       assert.deepEqual(JSON.parse((await get('/api/integrations/facebook/automation',b)).body),{rules:[],actions:[]});
-      const own=await get('/api/integrations/facebook',a); assert.equal(JSON.parse(own.body).configured,true); assert.ok(!own.body.includes(pageToken)); assert.ok(!own.body.includes(config.appSecret));
+      const own=await get('/api/integrations/facebook',a); assert.equal(JSON.parse(own.body).configured,true); assert.equal(JSON.parse(own.body).tokenHealth.state,'unknown'); assert.ok(!own.body.includes(pageToken)); assert.ok(!own.body.includes(config.appSecret));
     });
     await t.test('Errores y resultados inciertos de Messenger conservan solo diagnósticos seguros',async()=>{
       const job={comment_id:commentId,status:'dm_sending',public_text:publicText,dm_text:dmText};

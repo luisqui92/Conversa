@@ -37,6 +37,15 @@ async function update() {
     const [account, report] = await Promise.all([get(`/api/integrations/${channel}`), get(`/api/integrations/${channel}/automation`)]);
     content.hidden = false;
     document.querySelector('#account').textContent = account.configured ? `${channel === 'instagram' ? '@' : ''}${account.username} · ${account.receivedEvents} entradas recibidas · ${account.mode === 'comment-then-dm' ? 'Automatización por publicación activada' : 'Recepción de eventos'}` : `Esta cuenta de Conversa no tiene una conexión de ${network} configurada.`;
+    const health = document.querySelector('#token-health');
+    if (health) {
+      health.hidden = !account.configured || !account.tokenHealth;
+      health.textContent = account.tokenHealth?.message || '';
+      health.className = ['reconnect', 'expiring', 'unknown'].includes(account.tokenHealth?.state) ? 'warning' : '';
+      if (account.tokenHealth?.expiresAt > 0) health.textContent += ' Vence: ' + new Date(account.tokenHealth.expiresAt * 1000).toLocaleString('es-BO') + '.';
+      if (account.tokenHealth?.dataAccessExpiresAt > 0) health.textContent += ' Acceso a datos hasta: ' + new Date(account.tokenHealth.dataAccessExpiresAt * 1000).toLocaleString('es-BO') + '.';
+      if (account.tokenHealth?.checkedAt) health.textContent += ' Comprobado: ' + new Date(account.tokenHealth.checkedAt).toLocaleString('es-BO') + '.';
+    }
     table('#rules', ['Publicación', 'Estado', 'Respuesta pública', 'Mensaje privado'], report.rules.map(rule => [rule.media_id, rule.enabled ? 'Activa' : 'Pausada', rule.public_text, rule.dm_text]));
     table('#actions', ['Comentario', 'Resultado', 'Actualizado'], report.actions.map(action => {
       const info = document.createElement('span'); info.textContent = (labels[action.status] || action.status).replaceAll('Instagram', network);

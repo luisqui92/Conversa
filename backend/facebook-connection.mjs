@@ -6,7 +6,7 @@ export const writeFacebook = writeInstagram;
 export function safeFacebookError(status, data) {
   const code = Number.isSafeInteger(data?.error?.code) ? data.error.code : null;
   const subcode = Number.isSafeInteger(data?.error?.error_subcode) ? data.error.error_subcode : null;
-  return `Facebook HTTP ${status}${code !== null ? `; código ${code}` : ''}${subcode !== null ? `; subcódigo ${subcode}` : ''}. ${code === 190 ? 'Revisa la vigencia del token.' : 'Revisa permisos y acceso a la página.'}`;
+  return `Facebook HTTP ${status}${code !== null ? `; código ${code}` : ''}${subcode !== null ? `; subcódigo ${subcode}` : ''}. ${code === 190 ? 'Facebook rechazó la autorización. Renueva la conexión con un token de usuario nuevo.' : 'Revisa permisos y acceso a la página.'}`;
 }
 async function graph(path, token, options = {}, request = fetch) {
   let response;

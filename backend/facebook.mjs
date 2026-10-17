@@ -2,12 +2,13 @@ import { createInterface, emitKeypressEvents } from 'node:readline';
 import { dirname, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { openStore } from './store.mjs';
-import { resolveFacebookPage, readFacebook, writeFacebook, subscribeFacebookPage } from './facebook-connection.mjs';
+import { readFacebook, writeFacebook, subscribeFacebookPage } from './facebook-connection.mjs';
 import { openFacebookAutomation } from './facebook-automation.mjs';
+import { defaultFacebookAppId, connectFacebookDurable, renewFacebookConnection, checkStoredFacebookToken, facebookCredentialStatus } from './facebook-token.mjs';
 
 const [command, pageOrPostId, publicText, dmText] = process.argv.slice(2);
-if (!['setup','subscribe','status','enable','disable'].includes(command)) {
-  console.error('Uso: node backend/facebook.mjs setup [ID_PAGINA] | subscribe | status | enable ID_POST "RESPUESTA" "MENSAJE_PRIVADO" | disable ID_POST'); process.exit(2);
+if (!['setup','renew','check-token','subscribe','status','enable','disable'].includes(command)) {
+  console.error('Uso: node backend/facebook.mjs setup [ID_PAGINA] | renew [ID_APP] | check-token | subscribe | status | enable ID_POST "RESPUESTA" "MENSAJE_PRIVADO" | disable ID_POST'); process.exit(2);
 }
 const database = process.env.DATABASE_PATH || '/data/conversa.sqlite';
 const path = process.env.FACEBOOK_CONFIG_PATH || join(dirname(database), 'facebook.credentials.json');
@@ -29,6 +30,14 @@ function secret(prompt) {
     process.stdin.on('keypress',press);
   });
 }
+function showToken(config, actions = []) {
+  const health = facebookCredentialStatus(config, actions);
+  console.log(`Autorización: ${health.message}`);
+  const date = value => value === 0 ? 'sin vencimiento programado informado por Meta' : value === null ? 'no informado' : new Date(value * 1000).toISOString();
+  console.log(`Vencimiento del token de PÁGINA: ${date(health.expiresAt)}`);
+  console.log(`Vencimiento del acceso a datos: ${date(health.dataAccessExpiresAt)}`);
+  if (health.checkedAt) console.log(`Última comprobación: ${health.checkedAt}`);
+}
 try {
   const previous = readFacebook(path);
   if (command === 'setup') {
@@ -41,22 +50,37 @@ try {
     if (previous && await ask('Ya existe una página conectada. Escribe REEMPLAZAR para actualizarla: ') !== 'REEMPLAZAR') throw new Error('Conexión anterior conservada.');
     const userToken = await secret('Token de USUARIO generado en el Explorador de Graph (oculto): ');
     if (!userToken || /\s/.test(userToken)) throw new Error('Formato de token no válido.');
-    console.log('Obteniendo y comprobando el token de la página seleccionada…');
-    const page = await resolveFacebookPage(userToken, pageId);
-    console.log(`Facebook confirmó la página: ${page.username} (${page.accountId}).`);
     const appSecret = await secret('Clave secreta de Conversa → Configuración de la app → Básica (oculta; distinta de la clave de Instagram): ');
     if (!/^[a-fA-F0-9]{32}$/.test(appSecret)) throw new Error('Se esperaba la clave secreta de 32 caracteres hexadecimales de la app de Meta.');
-    const config = { ...page, ownerId:user.id, ownerEmail:user.email, appSecret,
-      verifyToken: previous?.verifyToken || randomBytes(32).toString('hex'), checkedAt:new Date().toISOString() };
+    const appId = previous?.appId || process.env.FACEBOOK_APP_ID || defaultFacebookAppId;
+    console.log(`Ampliando la autorización de usuario y comprobando la página con la app ${appId}…`);
+    const page = await connectFacebookDurable({ userToken, appId, appSecret, pageId });
+    console.log(`Facebook confirmó la página: ${page.username} (${page.accountId}).`);
+    const config = { ...page, ownerId:user.id, ownerEmail:user.email,
+      verifyToken: previous?.verifyToken || randomBytes(32).toString('hex') };
     writeFacebook(path, config);
     console.log('Credenciales de Facebook guardadas. El token de usuario no se almacena.');
+    showToken(config);
     console.log(`URL de devolución de llamada: ${process.env.APP_ORIGIN || 'https://cc.chatgo.ia.bo'}/api/webhooks/facebook`);
     console.log(`Token de verificación: ${config.verifyToken}`);
     console.log('Copia estos dos valores a los webhooks de Page/Facebook de la app Conversa. No reemplaces el webhook de Instagram.');
     console.log('Después de verificar y suscribir los campos en Meta, ejecuta: node backend/facebook.mjs subscribe');
   } else {
     if (!previous) throw new Error('Configura primero Facebook con backend/facebook.mjs setup.');
-    if (command === 'subscribe') {
+    if (command === 'renew') {
+      if (!process.stdin.isTTY) throw new Error('Ejecuta renew en una terminal interactiva; el token se introduce oculto.');
+      console.log(`Renovación de ${previous.username} (${previous.accountId}). Se conservan reglas, propietario y webhook.`);
+      const userToken = await secret('Token NUEVO de USUARIO de la app Conversa (oculto): ');
+      console.log('Intercambiando la autorización y comprobando el token de página con Meta…');
+      const config = await renewFacebookConnection(path, userToken, pageOrPostId || process.env.FACEBOOK_APP_ID);
+      console.log('Autorización de página renovada. Los tokens de usuario no se guardaron.');
+      showToken(config);
+      console.log('Prueba con un comentario nuevo. Los envíos fallidos anteriores no se repiten automáticamente.');
+    } else if (command === 'check-token') {
+      const config = await checkStoredFacebookToken(path);
+      showToken(config);
+      if (facebookCredentialStatus(config).state === 'reconnect') process.exitCode = 1;
+    } else if (command === 'subscribe') {
       await subscribeFacebookPage(previous);
       console.log(`Facebook confirmó la suscripción de ${previous.username} a feed, messages y messaging_postbacks. Verifica también el callback y los campos en Meta.`);
     } else if (command === 'enable') {
@@ -68,6 +92,7 @@ try {
     } else {
       const report = automation.report(previous.ownerId);
       console.log(`Página: ${previous.username}\nID: ${previous.accountId}\nPropietario en Conversa: ${previous.ownerEmail}\nValidada: ${previous.checkedAt}\nEventos recibidos: ${store.facebookEventCount(previous.ownerId)}\nReglas activas: ${report.rules.filter(r => r.enabled && r.account_id === previous.accountId).length}`);
+      showToken(previous, report.actions);
       for (const action of report.actions.slice(0,5)) console.log(`Comentario ${action.comment_id}: ${action.status}${action.last_error ? ' — ' + action.last_error : ''}`);
     }
   }

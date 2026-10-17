@@ -5,6 +5,7 @@ import { openStore } from './store.mjs';
 import { equalSecret, readInstagram, validSignature, rawBody } from './instagram-connection.mjs';
 import { openInstagramAutomation, createInstagramWorker } from './instagram-automation.mjs';
 import { readFacebook } from './facebook-connection.mjs';
+import { facebookCredentialStatus } from './facebook-token.mjs';
 import { openFacebookAutomation, createFacebookWorker } from './facebook-automation.mjs';
 
 export function makeServer({ store, origin = 'https://cc.chatgo.ia.bo', instagram = () => null, automation = null, facebook = () => null, facebookAutomation = null }) {
@@ -91,8 +92,9 @@ export function makeServer({ store, origin = 'https://cc.chatgo.ia.bo', instagra
       if (req.method === 'GET' && path === '/api/integrations/facebook') {
         const config = facebook();
         if (!config || config.ownerId !== user.id) return send(res, 200, { configured: false });
-        const active = facebookAutomation?.report(user.id).rules.some(rule => rule.enabled && rule.account_id === config.accountId);
-        return send(res, 200, { configured:true, username:config.username, accountId:config.accountId, checkedAt:config.checkedAt, receivedEvents:store.facebookEventCount(user.id), mode:active ? 'comment-then-dm' : 'receive-only' });
+        const report = facebookAutomation?.report(user.id);
+        const active = report?.rules.some(rule => rule.enabled && rule.account_id === config.accountId);
+        return send(res, 200, { configured:true, username:config.username, accountId:config.accountId, checkedAt:config.checkedAt, receivedEvents:store.facebookEventCount(user.id), mode:active ? 'comment-then-dm' : 'receive-only', tokenHealth:facebookCredentialStatus(config, report?.actions) });
       }
       if (req.method === 'GET' && path === '/api/integrations/facebook/events') return send(res, 200, { events:store.readFacebookEvents(user.id) });
       if (req.method === 'GET' && path === '/api/integrations/facebook/automation') return send(res, 200, facebookAutomation?.report(user.id) || {rules:[],actions:[]});
