@@ -20,7 +20,9 @@ esa capacidad. La documentación directa de Meta no pudo consultarse por errores
 acceso. Las referencias de menciones a páginas no demuestran soporte para personas.
 
 La prueba ensaya el formato candidato `@[ID_AUTOR]` en `message`, usando exclusivamente
-el autor que Graph devuelve para un comentario del piloto. No se presupone que Meta
+el autor que Graph devuelve para un comentario del piloto o, si Graph omite `from`,
+el de su webhook firmado guardado. Se exige coincidencia de propietario, página,
+publicación y comentario, y se rechazan identidades contradictorias. No se presupone que Meta
 acepte esa sintaxis para perfiles personales. Un HTTP 200 o ID de respuesta no basta:
 se consulta `message_tags` para distinguir una etiqueta reconocida de texto literal.
 La notificación se verifica aparte en la cuenta destinataria.
@@ -42,6 +44,10 @@ Usa un ID explícito para consultar siempre el mismo intento.
 
 Antes del POST se comprueban la identidad del token, la propiedad de la publicación
 y el autor. El comentario debe constar en `facebook_actions` para esa página y propietario.
+Graph puede devolver el identificador simple del comentario en lugar del compuesto;
+se acepta esa equivalencia, manteniendo la comprobación de la publicación. Si omite
+el autor, se consulta únicamente el historial privado de siete días del propietario.
+La salida `fuenteAutor` distingue `Graph` de `Webhook firmado guardado`.
 El texto de prueba es `@[ID_AUTOR] Prueba de mención de Conversa.`; si Meta no transforma
 el formato, podría quedar visible como texto literal en la respuesta de prueba.
 

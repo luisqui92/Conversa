@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { probeMention, recognizedMention } from './facebook-mention.mjs';
+import { probeMention, recognizedMention, authorFromEvents, sameCommentId } from './facebook-mention.mjs';
 
 const config = { accountId: '123456789012345', ownerId: 'owner', accessToken: 'private-test-token' };
 const action = { account_id: config.accountId, user_id: config.ownerId,
@@ -68,6 +68,51 @@ test('Sin identidad de página, propiedad del post o autor, no hay POST', async 
         return f.args.request(url, options);
       };
       await assert.rejects(probeMention({ ...f.args, request }));
+      assert.equal(f.calls.filter(c => c.options.method === 'POST').length, 0);
+    } finally { f.close(); }
+  }
+});
+test('Recupera el autor de un evento de la misma página, post y comentario; rechaza otros hilos y conflictos', () => {
+  const entry = { id: config.accountId, changes: [{ field: 'feed', value: {
+    item: 'comment', verb: 'add', post_id: action.media_id, parent_id: action.media_id,
+    comment_id: action.comment_id, from: { id: authorId }
+  } }] };
+  assert.equal(authorFromEvents(config, action, [entry]), authorId);
+  assert.equal(authorFromEvents(config, action, [{ ...entry, id: authorId }]), null);
+  for (const override of [
+    { post_id: '999999999999999' }, { parent_id: action.comment_id },
+    { comment_id: '999999999999999' }, { verb: 'edit' }, { item: 'post' }
+  ]) {
+    const modified = { ...entry, changes: [{ field: 'feed', value: { ...entry.changes[0].value, ...override } }] };
+    assert.equal(authorFromEvents(config, action, [modified]), null);
+  }
+  const conflicting = { ...entry, changes: [{ field: 'feed', value: { ...entry.changes[0].value, from: { id: '999999999999999' } } }] };
+  assert.throws(() => authorFromEvents(config, action, [entry, conflicting]), /no coinciden/);
+});
+test('Graph puede omitir from o devolver un ID simple: usa el evento guardado sin inventar un autor', async () => {
+  const f = fixture();
+  try {
+    const request = async (url, options) => {
+      if (url.includes('/' + action.comment_id + '?')) return ok({ id: action.comment_id.split('_').at(-1) });
+      return f.args.request(url, options);
+    };
+    const result = await probeMention({ ...f.args, request, storedAuthorId: authorId });
+    assert.equal(result.etiquetaReconocida, true);
+    assert.equal(result.fuenteAutor, 'Webhook firmado guardado');
+    assert.equal(f.calls.filter(c => c.options.method === 'POST').length, 1);
+    assert.equal(sameCommentId('999999999999999_345678901234567', action.comment_id), false);
+    assert.equal(sameCommentId(undefined, action.comment_id), false);
+  } finally { f.close(); }
+});
+test('No usa el autor del evento si Graph identifica otro autor o si el autor es la página', async () => {
+  for (const storedAuthorId of ['999999999999999', config.accountId]) {
+    const f = fixture();
+    try {
+      const request = async (url, options) => {
+        if (storedAuthorId === config.accountId && url.includes('/' + action.comment_id + '?')) return ok({ id: action.comment_id });
+        return f.args.request(url, options);
+      };
+      await assert.rejects(probeMention({ ...f.args, request, storedAuthorId }));
       assert.equal(f.calls.filter(c => c.options.method === 'POST').length, 0);
     } finally { f.close(); }
   }

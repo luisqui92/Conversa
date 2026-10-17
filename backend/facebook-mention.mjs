@@ -8,6 +8,29 @@ import { readFacebook, facebookGraph, safeFacebookError } from './facebook-conne
 const id = value => typeof value === 'string' && /^\d{5,30}(?:_\d{5,30}){0,2}$/.test(value);
 export class MentionError extends Error {}
 
+// Graph may return a plain comment ID for a request made with its compound ID.
+export const sameCommentId = (a, b) => id(a) && id(b) && (a === b ||
+  ((!a.includes('_') || !b.includes('_')) && a.split('_').at(-1) === b.split('_').at(-1)));
+
+// Entries must come from the owner's private, signature-verified event store.
+export function authorFromEvents(config, action, entries) {
+  const authors = new Set();
+  for (const entry of entries) {
+    if (String(entry?.id) !== config.accountId) continue;
+    for (const change of Array.isArray(entry.changes) ? entry.changes : []) {
+      const value = change?.value;
+      if (change?.field !== 'feed' || value?.item !== 'comment' || value.verb !== 'add' ||
+          !sameCommentId(String(value.comment_id || ''), action.comment_id) ||
+          String(value.post_id) !== action.media_id ||
+          (value.parent_id && String(value.parent_id) !== action.media_id)) continue;
+      const author = String(value.from?.id || value.sender_id || '');
+      if (/^\d{5,30}$/.test(author)) authors.add(author);
+    }
+  }
+  if (authors.size > 1) throw new MentionError('Los eventos guardados no coinciden en el autor; no se enviará una prueba.');
+  return authors.values().next().value || null;
+}
+
 async function graph(config, path, request, body) {
   let response, data;
   try {
@@ -36,14 +59,15 @@ async function inspectReply(config, action, record, request) {
   return {
     comentarioOriginal: action.comment_id,
     respuestaDePrueba: reply.id,
-    dentroDelComentario: reply.parent?.id === action.comment_id,
+    dentroDelComentario: Boolean(sameCommentId(reply.parent?.id, action.comment_id)),
     oculta: typeof reply.is_hidden === 'boolean' ? reply.is_hidden : null,
     etiquetaReconocida: recognizedMention(reply.message_tags, record.authorId),
+    fuenteAutor: record.authorSource || 'Graph',
     nota: 'La etiqueta y la notificación se comprueban por separado. Verifica el nombre enlazado y la alerta en Facebook.'
   };
 }
 
-export async function probeMention({ config, action, markerPath, mode = 'inspect', request = fetch }) {
+export async function probeMention({ config, action, markerPath, mode = 'inspect', request = fetch, storedAuthorId = null }) {
   if (!['inspect', 'test'].includes(mode) || !id(config?.accountId) || !config?.ownerId ||
       !id(action?.comment_id) || !id(action?.media_id) || action.account_id !== config.accountId ||
       action.user_id !== config.ownerId) throw new MentionError('Indica un comentario registrado por el piloto de esta página y propietario.');
@@ -63,12 +87,15 @@ export async function probeMention({ config, action, markerPath, mode = 'inspect
   const post = await graph(config, `${action.media_id}?fields=id,from{id}`, request);
   if (String(post.id) !== action.media_id || String(post.from?.id) !== config.accountId) throw new MentionError('Facebook no confirmó que la publicación pertenece a esta página.');
   const original = await graph(config, `${action.comment_id}?fields=id,from{id}`, request);
-  const authorId = String(original.from?.id || '');
-  if (String(original.id) !== action.comment_id || !/^\d{5,30}$/.test(authorId) || authorId === config.accountId) {
-    throw new MentionError('Facebook no devolvió un autor válido distinto de la página. No se envió la respuesta.');
-  }
+  if (!sameCommentId(String(original.id || ''), action.comment_id)) throw new MentionError('Graph devolvió otro identificador de comentario. No se envió la respuesta.');
+  const graphAuthor = String(original.from?.id || '');
+  if (graphAuthor && storedAuthorId && graphAuthor !== storedAuthorId) throw new MentionError('Graph y el evento guardado muestran autores distintos. No se envió la respuesta.');
+  const authorId = graphAuthor || storedAuthorId || '';
+  if (!/^\d{5,30}$/.test(authorId)) throw new MentionError('Graph omitió el autor y no hay un evento guardado que permita identificarlo. No se envió la respuesta.');
+  if (authorId === config.accountId) throw new MentionError('El autor del comentario es la propia página. No se envió la respuesta.');
+  const authorSource = graphAuthor ? 'Graph' : 'Webhook firmado guardado';
   // Persist BEFORE the only POST, including across crashes and concurrent CLI runs.
-  record = { accountId: config.accountId, commentId: action.comment_id, authorId, attemptedAt: new Date().toISOString(), status: 'sending' };
+  record = { accountId: config.accountId, commentId: action.comment_id, authorId, authorSource, attemptedAt: new Date().toISOString(), status: 'sending' };
   try { writeFileSync(markerPath, JSON.stringify(record), { flag: 'wx', mode: 0o600 }); }
   catch (error) {
     if (error.code === 'EEXIST') throw new MentionError('Otra ejecución ya reservó esta prueba; no se reenviará.');
@@ -92,15 +119,21 @@ async function main() {
   const config = readFacebook(process.env.FACEBOOK_CONFIG_PATH || join(dirname(database), 'facebook.credentials.json'));
   if (!config) throw new MentionError('Configura primero la página de Facebook.');
   const db = new DatabaseSync(database, { readOnly: true });
-  let action;
+  let action, storedAuthorId = null;
   try {
     action = db.prepare(`SELECT account_id,user_id,comment_id,media_id FROM facebook_actions
       WHERE account_id=? AND user_id=? AND public_id IS NOT NULL ${commentId ? 'AND comment_id=?' : ''}
       ORDER BY updated_at DESC LIMIT 1`).get(config.accountId, config.ownerId, ...(commentId ? [commentId] : []));
+    if (action && mode === 'test') {
+      const entries = db.prepare(`SELECT body FROM facebook_events WHERE user_id=? AND received_at>?
+        ORDER BY received_at DESC LIMIT 2000`).all(config.ownerId, Date.now() - 7 * 86400_000)
+        .flatMap(row => { try { return [JSON.parse(row.body)]; } catch { return []; } });
+      storedAuthorId = authorFromEvents(config, action, entries);
+    }
   } finally { db.close(); }
   if (!action) throw new MentionError('No hay un comentario con respuesta automática registrada para esta página.');
   const markerPath = join(dirname(database), `facebook-mention.${config.accountId}.${action.comment_id}.json`);
-  console.log(JSON.stringify(await probeMention({ config, action, markerPath, mode }), null, 2));
+  console.log(JSON.stringify(await probeMention({ config, action, markerPath, mode, storedAuthorId }), null, 2));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
