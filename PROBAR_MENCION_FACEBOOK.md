@@ -74,6 +74,13 @@ Para validar el resultado real, comprueba que el nombre abre el perfil y si lleg
 alerta. Aun con etiqueta reconocida, no se garantiza una notificación. La automatización
 habitual no incorporará menciones como una función verificada a partir de mocks.
 
+Tras una prueba en la VM que devolvió `etiquetaReconocida: true`, se añadió el marcador
+opcional `{autor}` para el texto público de reglas Facebook. La herramienta de prueba
+no lo activa: hay que actualizar la imagen y cambiar la regla siguiendo
+[CONECTAR_FACEBOOK.md](CONECTAR_FACEBOOK.md#mencionar-al-autor-en-la-respuesta-automática).
+La lectura de Graph y el aspecto/notificación en la interfaz se siguen comprobando
+por separado; una prueba aislada no acredita el comportamiento para todos los usuarios.
+
 ## Pruebas locales
 
 ```bash

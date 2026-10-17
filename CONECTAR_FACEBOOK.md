@@ -77,6 +77,35 @@ sudo docker compose -f compose.vm.yaml exec api node backend/facebook.mjs disabl
 
 Una solicitud en curso puede terminar. La pausa se aplica al siguiente paso pendiente.
 
+## Mencionar al autor en la respuesta automática
+
+Para probar una mención real, coloca `{autor}` en el texto público de la regla:
+
+```bash
+sudo docker compose -f compose.vm.yaml exec api node backend/facebook.mjs enable 309667913276491_1554451656687306 "{autor} Te mandé info por Messenger. Si no lo ves, revisa Solicitudes." "hola soy yo yo puedo con todo"
+```
+
+El receptor sustituye `{autor}` por `@[ID_AUTOR]` usando únicamente el ID del
+comentario que llegó en el webhook firmado. Congela el texto en la cola por comentario;
+no usa el nombre visible, el administrador de la página ni otro autor del historial.
+La expansión es exclusiva del texto público de Facebook y debe quedar dentro de 1.000
+caracteres. Un autor no numérico o un texto demasiado largo se descarta sin envíos.
+Las reglas sin `{autor}` conservan su texto. Instagram no interpreta este marcador.
+
+Ejecutar enable con el texto cambiado actualiza la fecha de activación: probar con
+un comentario nuevo después de ejecutar la orden. No modifica respuestas ya publicadas
+ni repite los mensajes del historial. Se mantiene el orden solicitud pública confirmada
+→ solicitud de privado, con deduplicación y detención ante errores.
+
+En la VM, la herramienta de prueba separada obtuvo `message_tags` con el autor para
+una respuesta de LUKMI, usando su webhook guardado. Esto acredita la respuesta de Graph
+para ese caso; la aparición del enlace y la notificación se comprueban en Facebook.
+La captura posterior mostraba el texto habitual sin el marcador. La nueva plantilla
+debe instalarse y activarse para probarla en los siguientes comentarios. No se garantiza
+que todas las cuentas permitan la mención ni que Facebook entregue una alerta.
+
+Diagnóstico individual: [PROBAR_MENCION_FACEBOOK.md](PROBAR_MENCION_FACEBOOK.md).
+
 ## Límites y resultados
 
 El piloto procesa comentarios nuevos de tipo `feed` / `item: comment` / `verb: add`, con identidad del autor y publicación seleccionada. Descarta ediciones, borrados, comentarios propios y respuestas a otros comentarios. Utiliza una ventana conservadora de diez minutos y un máximo de treinta flujos por página y hora. No hay tratamiento específico de publicaciones en vivo; usar una publicación normal para la primera prueba.
@@ -103,6 +132,7 @@ node backend/checks.mjs
 node backend/instagram-checks.mjs
 node backend/instagram-automation-checks.mjs
 node backend/facebook-checks.mjs
+node backend/facebook-mention-checks.mjs
 ```
 
-Pruebas locales correctas: 56 casos del simulador, 11 reportados de acceso/guardado, 10 de conexión Instagram, 17 de automatización y 14 de Facebook. Proveedores externos simulados: no se utilizaron tokens reales ni se hicieron envíos desde este entorno. Las pruebas de rutas son en proceso; se revisaron también sintaxis y archivos estáticos. Instalación, suscripción y prueba real de Facebook pendientes en la VM del usuario.
+Pruebas locales correctas: 56 casos del simulador, 11 reportados de acceso/guardado, 10 de conexión Instagram, 17 de automatización Instagram, 17 de Facebook y 9 del diagnóstico de menciones. Proveedores externos simulados: no se utilizaron tokens reales ni se hicieron envíos desde este entorno. Las pruebas de rutas son en proceso. El usuario confirmó el piloto real de comentario y Messenger y un diagnóstico de mención reconocido por Graph; instalar y activar la plantilla con `{autor}` y comprobar su aspecto y notificación siguen pendientes en su VM.

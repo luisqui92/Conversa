@@ -2,6 +2,13 @@ import { openCommentAutomation } from './comment-automation-store.mjs';
 import { createInstagramWorker } from './instagram-automation.mjs';
 import { facebookGraph, safeFacebookError } from './facebook-connection.mjs';
 
+export function renderFacebookReply(text, comment) {
+  if (!text.includes('{autor}')) return text;
+  const authorId = comment?.from?.id;
+  if (typeof authorId !== 'string' || !/^\d{5,30}$/.test(authorId)) return null;
+  return text.replaceAll('{autor}', `@[${authorId}]`);
+}
+
 export function facebookCommentEntries(entries) {
   const normalized = [];
   for (const entry of entries) for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
@@ -16,7 +23,7 @@ export function facebookCommentEntries(entries) {
   return normalized;
 }
 export function openFacebookAutomation(path, options = {}) {
-  const store = openCommentAutomation(path, { ...options, channel: 'facebook' });
+  const store = openCommentAutomation(path, { ...options, channel: 'facebook', renderPublicText: renderFacebookReply });
   return { ...store, enqueue: (config, entries) => store.enqueue(config, facebookCommentEntries(entries)) };
 }
 export async function sendFacebookPhase(config, job, request = fetch) {

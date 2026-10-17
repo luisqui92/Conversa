@@ -8,7 +8,7 @@ import { createHmac } from 'node:crypto';
 import { openStore } from './store.mjs';
 import { makeServer } from './server.mjs';
 import { openInstagramAutomation } from './instagram-automation.mjs';
-import { openFacebookAutomation, createFacebookWorker, sendFacebookPhase } from './facebook-automation.mjs';
+import { openFacebookAutomation, createFacebookWorker, sendFacebookPhase, renderFacebookReply } from './facebook-automation.mjs';
 import { resolveFacebookPage, subscribeFacebookPage } from './facebook-connection.mjs';
 
 const pageId='309667913276491', postId=pageId+'_123456789012345', commentId='123456789012345_987654321012345';
@@ -127,6 +127,46 @@ test('Webhook de Page, reglas y Messenger aislados de Instagram',async t=>{
       assert.equal(rejected.uncertain,false); assert.ok(!rejected.error.includes(pageToken));
       const unknown=await sendFacebookPhase(config,job,async()=>{throw new Error(pageToken);}); assert.equal(unknown.uncertain,true);
       const empty=await sendFacebookPhase(config,job,async()=>ok({success:true})); assert.equal(empty.uncertain,true);
+    });
+    await t.test('La regla con {autor} usa al autor del webhook firmado antes del comentario y conserva el DM',async()=>{
+      now+=1000;
+      const template='{autor} '+publicText, newId='123456789012345_987654321012349';
+      facebook.enable(config,postId,template,dmText); now+=1000;
+      assert.equal((await hook([entry(newId,{from:{id:'444444444444',name:'No usar como etiqueta'}})])).status,200);
+      const calls=[];
+      const worker=createFacebookWorker({automation:facebook,facebook:()=>config,request:async(url,options)=>{
+        calls.push({url,body:JSON.parse(options.body)});
+        return url.endsWith('/comments')?ok({id:'mention-public-id'}):ok({message_id:'mention-private-id'});
+      }});
+      await worker.tick();
+      assert.deepEqual(calls[0].body,{message:'@[444444444444] '+publicText});
+      assert.ok(calls[0].url.endsWith('/'+newId+'/comments'));
+      await worker.tick();
+      assert.deepEqual(calls[1].body,{recipient:{comment_id:newId},message:{text:dmText}});
+      assert.equal(facebook.enqueue(config,[entry(newId)]),0);
+      await worker.tick(); assert.equal(calls.length,2);
+      assert.equal(facebook.report(owner.id).rules[0].public_text,template);
+    });
+    await t.test('Cada comentario conserva su propio autor y texto al reabrir la cola',()=>{
+      now+=1000;
+      facebook.enqueue(config,[entry('123456789012345_987654321012350',{from:{id:'555555555555'}}),
+        entry('123456789012345_987654321012351',{from:{id:'666666666666'}})]);
+      const reopened=openFacebookAutomation(path,{now:()=>now});
+      try {
+        const first=reopened.claim(config);
+        assert.equal(first.public_text,'@[555555555555] '+publicText);
+        reopened.fail(first,false,'Prueba local');
+        const second=reopened.claim(config);
+        assert.equal(second.public_text,'@[666666666666] '+publicText);
+        reopened.fail(second,false,'Prueba local');
+      }finally{reopened.close();}
+    });
+    await t.test('No publica etiquetas con identidad mal formada ni textos expandidos excesivos',()=>{
+      assert.equal(renderFacebookReply(publicText,{from:{id:'bad'}}),publicText);
+      assert.equal(renderFacebookReply('{autor} Hola',{from:{id:'bad'}}),null);
+      assert.equal(facebook.enqueue(config,[entry('123456789012345_987654321012352',{from:{id:'123] texto'}})]),0);
+      now+=1000; facebook.enable(config,postId,'{autor} '+'x'.repeat(991),dmText); now+=1000;
+      assert.equal(facebook.enqueue(config,[entry('123456789012345_987654321012353')]),0);
     });
   }finally{server.close();facebook.close();instagram.close();store.close();rmSync(dir,{recursive:true,force:true});}
 });

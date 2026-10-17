@@ -4,7 +4,7 @@ const numericId = value => typeof value === 'string' && /^\d{5,30}$/.test(value)
 const visibleText = (value, limit) => typeof value === 'string' && value.trim().length > 0 && value.length <= limit && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value);
 
 // Uses the existing private database and user ownership; no credentials in these tables.
-export function openCommentAutomation(path, { now = Date.now, channel = 'instagram' } = {}) {
+export function openCommentAutomation(path, { now = Date.now, channel = 'instagram', renderPublicText = text => text } = {}) {
   if (!['instagram', 'facebook'].includes(channel)) throw new Error('Canal no válido.');
   const objectId = channel === 'facebook'
     ? value => typeof value === 'string' && /^\d{5,30}(?:_\d{5,30}){0,2}$/.test(value)
@@ -65,11 +65,15 @@ export function openCommentAutomation(path, { now = Date.now, channel = 'instagr
             if (String(value.from.id) === config.accountId || (typeof value.from.username === 'string' && value.from.username.toLowerCase() === config.username.toLowerCase())) continue;
             const active = rule(config, value.media.id);
             if (!active?.enabled || time < Math.floor(active.enabled_at / 1000) * 1000) continue;
+            // Freeze the per-comment reply before enqueueing; later phases never
+            // look up another author's identity or change an existing message.
+            const publicText = renderPublicText(active.public_text, value);
+            if (!visibleText(publicText, 1000)) continue;
             // Pilot limit: at most 30 new comment workflows per account per hour.
             if (db.prepare('SELECT count(*) AS n FROM automation_actions WHERE account_id=? AND created_at>?').get(config.accountId, now() - 3600_000).n >= 30) continue;
             const result = db.prepare(`INSERT OR IGNORE INTO automation_actions
               (account_id,comment_id,user_id,media_id,rule_enabled_at,comment_at,public_text,dm_text,status,created_at,updated_at)
-              VALUES (?,?,?,?,?,?,?,?,'pending',?,?)`).run(config.accountId, value.id, config.ownerId, value.media.id, active.enabled_at, time, active.public_text, active.dm_text, now(), now());
+              VALUES (?,?,?,?,?,?,?,?,'pending',?,?)`).run(config.accountId, value.id, config.ownerId, value.media.id, active.enabled_at, time, publicText, active.dm_text, now(), now());
             added += result.changes;
           }
         }
