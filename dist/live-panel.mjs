@@ -348,18 +348,56 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
         .join(
           '',
         )}</div><div class="live-section-title"><h2>Negocios</h2><span>Crear acceso → conectar canales → activar publicaciones</span></div>
-      <div class="live-table-wrap"><table class="live-table"><thead><tr><th>Negocio</th><th>Correo de acceso</th><th>Cuentas conectadas</th><th>Estado</th></tr></thead><tbody>${customers.map((c) => `<tr><td><strong>${e(c.name)}</strong></td><td>${e(c.email)}</td><td>${c.accounts}</td><td>${badge(c.accounts ? 'Canales configurados' : 'Pendiente de conexión', c.accounts ? 'success' : 'neutral')}</td></tr>`).join('')}</tbody></table></div>
+      <div class="live-table-wrap"><table class="live-table"><thead><tr><th>Negocio</th><th>Correo de acceso</th><th>Cuentas conectadas</th><th>Estado</th></tr></thead><tbody>${customers.map((c) => `<tr><td><strong>${e(c.name)}</strong></td><td>${e(c.email)}</td><td>${c.accounts}</td><td>${c.invitationPending ? `<button class="btn" data-invite-owner="${e(c.owner_id)}">Renovar invitación</button>` : badge(c.accounts ? 'Canales configurados' : 'Pendiente de conexión', c.accounts ? 'success' : 'neutral')}</td></tr>`).join('')}</tbody></table></div>
       <div class="live-health notice"><strong>Respaldo externo pendiente</strong><p>La migración conserva una copia local. Antes de incorporar datos comerciales, configura y comprueba una copia fuera de la VM que incluya la base y la llave de recuperación.</p></div>
       ${operationStatus?.workers?.length ? `<section class="live-process-card"><h2>Estado de los procesos</h2>${operationStatus.workers.map((w) => `<p>${e(NETWORKS[w.channel])} · Última actividad: ${date(w.lastTick)}${w.lastError ? ' · Último error interno: ' + date(w.lastError) : ''}</p>`).join('')}</section>` : ''}`
     );
   }
+  root.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-invite-owner]');
+    if (!button || !user.admin) return;
+    button.disabled = true;
+    try {
+      const result = await request(
+        '/api/admin/customers/' + button.dataset.inviteOwner + '/invitation',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        },
+      );
+      showInvitation(result.invitation);
+    } catch (error) {
+      toast(error.message || 'No se pudo renovar la invitación.');
+    } finally {
+      button.disabled = false;
+    }
+  });
   async function openCustomer() {
     if (!user.admin) return;
     customerModal?.remove();
     customerModal = document.createElement('dialog');
     customerModal.className = 'live-editor';
     customerModal.setAttribute('aria-label', 'Crear cliente');
-    customerModal.innerHTML = `<form><div class="live-editor-head"><h2>Crear cliente</h2><button type="button" class="icon-button" data-customer-close aria-label="Cerrar">✕</button></div><label class="field">Nombre del negocio<input name="name" required maxlength="100" autocomplete="organization"></label><label class="field">Correo de acceso<input name="email" type="email" required maxlength="254" autocomplete="off"></label><label class="field">Contraseña inicial<input name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"><small>Mínimo 12 caracteres. El cliente debe recibirla por un canal seguro.</small></label><p role="alert" class="live-form-error"></p><div class="live-editor-actions"><button type="button" class="btn" data-customer-close>Cancelar</button><button class="btn primary" type="submit">Crear acceso</button></div></form>`;
+    customerModal.innerHTML = `
+      <form>
+        <div class="live-editor-head">
+          <h2>Crear cliente</h2>
+          <button type="button" class="icon-button" data-customer-close aria-label="Cerrar">✕</button>
+        </div>
+        <label class="field">Nombre del negocio
+          <input name="name" required maxlength="100" autocomplete="organization">
+        </label>
+        <label class="field">Correo de acceso
+          <input name="email" type="email" required maxlength="254" autocomplete="off">
+        </label>
+        <p>El cliente elegirá su contraseña mediante un enlace privado de un solo uso.</p>
+        <p role="alert" class="live-form-error"></p>
+        <div class="live-editor-actions">
+          <button type="button" class="btn" data-customer-close>Cancelar</button>
+          <button class="btn primary" type="submit">Crear invitación</button>
+        </div>
+      </form>`;
     document.body.append(customerModal);
     customerModal.addEventListener('click', (event) => {
       if (event.target.closest('[data-customer-close]')) customerModal.close();
@@ -371,14 +409,14 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
         submit = form.querySelector('[type="submit"]');
       submit.disabled = true;
       try {
-        await request('/api/admin/customers', {
+        const created = await request('/api/admin/customers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(Object.fromEntries(fd)),
         });
         form.reset();
         customerModal.close();
-        toast('Cliente creado. Ya puede iniciar sesión con su propio acceso.');
+        showInvitation(created.invitation);
         await refresh();
       } catch (error) {
         form.querySelector('[role="alert"]').textContent =
@@ -388,6 +426,38 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
       }
     });
     customerModal.showModal();
+  }
+  function showInvitation(invitation) {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'live-editor';
+    dialog.setAttribute('aria-label', 'Invitación del cliente');
+    dialog.innerHTML = `
+      <h2>El acceso está listo para activar.</h2>
+      <p>Comparte este enlace en privado con el cliente. Caduca en 24 horas y solo se puede usar una vez.</p>
+      <label class="field">Enlace de invitación<input readonly aria-label="Enlace de invitación"></label>
+      <p>No se envió ningún correo automáticamente. El cliente elegirá su contraseña al abrir el enlace.</p>
+      <div class="live-editor-actions">
+        <button class="btn" data-copy>Copiar enlace</button>
+        <button class="btn primary" data-close>Cerrar</button>
+      </div>`;
+    const link = dialog.querySelector('input');
+    link.value = invitation.url;
+    dialog.querySelector('[data-copy]').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(link.value);
+        toast('Enlace copiado. Compártelo por un medio privado.');
+      } catch {
+        link.select();
+        toast('Selecciona y copia el enlace.');
+      }
+    });
+    dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('close', () => {
+      link.value = '';
+      dialog.remove();
+    });
+    document.body.append(dialog);
+    dialog.showModal();
   }
   function render() {
     if (!current) return;

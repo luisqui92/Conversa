@@ -9,6 +9,7 @@ import { facebookCredentialStatus } from './facebook-token.mjs';
 import { openFacebookAutomation, createFacebookWorker } from './facebook-automation.mjs';
 import { openChannelAccounts, loadMasterKey } from './channel-accounts.mjs';
 import { createOAuth } from './oauth.mjs';
+import { createInvitations } from './invitations.mjs';
 import { createCredentialMaintenance } from './credential-maintenance.mjs';
 
 export function makeServer({
@@ -23,6 +24,9 @@ export function makeServer({
   operations = null,
 }) {
   const allowedOrigin = new URL(origin).origin;
+  const invitations = registry
+    ? createInvitations({ store, registry, origin: allowedOrigin })
+    : null;
   if (!allowedOrigin.startsWith('https://')) throw new Error('APP_ORIGIN debe usar HTTPS.');
   function send(res, code, value, headers = {}) {
     res.writeHead(code, {
@@ -151,6 +155,31 @@ export function makeServer({
           return send(res, 403, { error: 'Origen no autorizado.' });
         if (!String(req.headers['content-type']).toLowerCase().startsWith('application/json'))
           return send(res, 415, { error: 'Se requiere application/json.' });
+      }
+      if (
+        invitations &&
+        req.method === 'POST' &&
+        ['/api/invitations/inspect', '/api/invitations/accept'].includes(path)
+      ) {
+        const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress)
+          .split(',')
+          .at(-1)
+          .trim();
+        if (!invitations.allow(ip))
+          return send(
+            res,
+            429,
+            { error: 'Demasiados intentos. Espera 15 minutos.' },
+            { 'Retry-After': '900' },
+          );
+        const input = await body(req, 4096);
+        return send(
+          res,
+          200,
+          path.endsWith('/accept')
+            ? invitations.accept(input?.token, input?.password)
+            : invitations.inspect(input?.token),
+        );
       }
       if (req.method === 'POST' && path === '/api/login') {
         const input = await body(req, 4096);
@@ -286,34 +315,28 @@ export function makeServer({
           externalBackupConfigured: false,
         });
       }
-      if (registry && path === '/api/admin/customers') {
+      const renewInvitation = /^\/api\/admin\/customers\/([a-f0-9-]{36})\/invitation$/.exec(path);
+      if (invitations && renewInvitation && req.method === 'POST') {
+        if (!registry.isAdmin(user.id))
+          return send(res, 403, { error: 'Solo el administrador puede gestionar invitaciones.' });
+        await body(req, 4096);
+        return send(res, 200, invitations.reissue(renewInvitation[1], user.id));
+      }
+      if (invitations && path === '/api/admin/customers') {
         if (!registry.isAdmin(user.id))
           return send(res, 403, { error: 'Solo el administrador puede gestionar clientes.' });
-        if (req.method === 'GET') return send(res, 200, { customers: registry.customers() });
+        if (req.method === 'GET') return send(res, 200, { customers: invitations.customers() });
         if (req.method === 'POST') {
           const input = await body(req, 4096);
-          if (
-            !input ||
-            typeof input.name !== 'string' ||
-            !input.name.trim() ||
-            input.name.length > 100 ||
-            typeof input.password !== 'string' ||
-            input.password.length < 12 ||
-            input.password.length > 256
-          )
-            return send(res, 422, {
-              error: 'Indica el negocio, correo y una contraseña de al menos 12 caracteres.',
-            });
           try {
-            const created = store.setPassword(input.email, input.password, true, (created) =>
-              registry.business(created.id, input.name.trim()),
-            );
-            return send(res, 201, { user: created, business: registry.business(created.id) });
+            return send(res, 201, invitations.create(input, user.id));
           } catch (error) {
-            return send(res, 422, {
+            return send(res, error.status || 422, {
               error: error.message.includes('UNIQUE')
                 ? 'Ya existe una cuenta con ese correo.'
-                : 'No se pudo crear el cliente. Revisa el correo y los datos.',
+                : error.status
+                  ? error.message
+                  : 'No se pudo crear la invitación. Revisa el correo y los datos.',
             });
           }
         }
