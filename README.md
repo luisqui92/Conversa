@@ -14,6 +14,8 @@ Plataforma en desarrollo de Lukmi SRL para responder comentarios y enviar inform
 
 El código de autorización está implementado, pero **atender clientes externos requiere que Meta apruebe los permisos y que se registren las URLs de retorno**. La campana de Facebook, la llegada a la bandeja principal y la lectura del DM dependen de Meta. Una respuesta aceptada por su API no garantiza esos resultados.
 
+La documentación vigente empieza en [docs/README.md](docs/README.md), con los procedimientos operativos y los requisitos de revisión de cambios y Meta.
+
 ## Instalar o actualizar
 
 Usa la [guía multicliente](docs/operacion/multicliente.md). El script `sudo bash deploy-vm.sh` conserva el proyecto Compose `conversa-demo` y su volumen de datos, detiene el worker antes de migrar y guarda un respaldo previo. Importa las conexiones piloto existentes sin volver a introducir sus tokens.
