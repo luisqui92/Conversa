@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { openDatabase } from './database.mjs';
 import { installAutomation } from './automation-schema.mjs';
+import { matchesKeyword } from './keyword-match.mjs';
 
 const numericId = (value) => typeof value === 'string' && /^\d{5,30}$/.test(value);
 const visibleText = (value, limit) =>
@@ -8,11 +9,6 @@ const visibleText = (value, limit) =>
   value.trim().length > 0 &&
   value.length <= limit &&
   !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value);
-const normalize = (value) =>
-  String(value)
-    .normalize('NFKD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase();
 export const automationRuleVersion = (rule) =>
   rule
     ? createHash('sha256')
@@ -235,9 +231,7 @@ export function openCommentAutomation(
               reason = 'El evento llegó fuera de la ventana segura de procesamiento.';
             } else if (
               JSON.parse(active.keywords).length &&
-              !JSON.parse(active.keywords).some((k) =>
-                normalize(value.text || '').includes(normalize(k)),
-              )
+              !JSON.parse(active.keywords).some((k) => matchesKeyword(value.text || '', k))
             ) {
               status = 'skipped_keyword';
               reason = 'El comentario no coincide con las palabras clave.';
