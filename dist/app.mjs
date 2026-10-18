@@ -2,6 +2,7 @@ import { CHANNELS, PLANS, LEAD_STAGES, priceLabel, updateLeadStage, makeId, norm
 import { newCampaign, createState, migrateLegacy, isValidState, upgradeIndustry } from './data.mjs';
 import { openConversaSession } from './session.mjs';
 import { createLivePanel, LIVE_PAGES } from './live-panel.mjs';
+import { startPanelNotifications } from './notifications.mjs';
 
 const icons={inbox:'<path d="M4 4h16v16H4zM4 13h5l1 3h4l1-3h5"/>',spark:'<path d="m12 3 2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6L12 3Z"/>',link:'<path d="m10 13 4-4M8 15l-2 2a4 4 0 0 1-5-5l4-4a4 4 0 0 1 5 0m4 1 2-2a4 4 0 0 1 5 5l-4 4a4 4 0 0 1-5 0"/>',layers:'<path d="m12 3 10 5-10 5L2 8l10-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/>',help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4m0 3h.01"/>',plus:'<path d="M12 5v14M5 12h14"/>',search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',check:'<path d="m5 12 4 4L19 6"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',arrow:'<path d="M4 12h16m-6-6 6 6-6 6"/>',download:'<path d="M12 3v12m-5-5 5 5 5-5M4 15v5h16v-5"/>',message:'<path d="M21 15a3 3 0 0 1-3 3H8l-5 3V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v9Z"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>',play:'<path d="m9 5 11 7-11 7V5Z"/>',food:'<path d="M5 3v7m3-7v7m3-7v7M5 7h6m-3 3v11M18 3c-3 3-3 8 0 8V3Zm0 8v10"/>'};
 const icon=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]||icons.message}</svg>`;
@@ -25,6 +26,7 @@ let page=titles[location.hash.slice(1)]?location.hash.slice(1):location.hash==='
 let filter='all',channelFilter='all',query='',selected=workspace().events[0]?.id,threadTab='dm',draftCampaign=null,toastTimer,dialogSubmit=null;
 const main=document.getElementById('main'),dialog=document.getElementById('dialog'),form=document.getElementById('dialog-form');
 const livePanel=createLivePanel({root:main,toast,navigate,serverMode:account.mode==='server'});
+if(account.mode==='server')startPanelNotifications({toast,onOpen:activity=>livePanel.openActivity(activity)});
 if(account.user)document.getElementById('live-owner').textContent=account.user.email;
 if(account.mode==='local')document.querySelector('.brand').href='#inbox';
 function workspace(){return data.workspaces[data.current];}

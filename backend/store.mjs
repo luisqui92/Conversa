@@ -3,6 +3,7 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHash } from
 import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createState, isValidState } from '../dist/data.mjs';
+import { installNotifications, notificationQueries } from './notifications.mjs';
 
 export const digest = value => createHash('sha256').update(value).digest('hex');
 export function validEmail(value) {
@@ -36,6 +37,8 @@ export function openStore(path, { now = Date.now } = {}) {
     CREATE INDEX IF NOT EXISTS instagram_events_owner_time ON instagram_events(user_id, received_at);
     CREATE TABLE IF NOT EXISTS facebook_events (hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), received_at INTEGER NOT NULL, body TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS facebook_events_owner_time ON facebook_events(user_id, received_at);`);
+  installNotifications(db);
+  const notifications = notificationQueries(db, now);
   const dummySalt = '00000000000000000000000000000000';
   const dummyHash = scryptSync('not-a-real-password', dummySalt, 64);
   function setPassword(email, password, create = false) {
@@ -68,6 +71,9 @@ export function openStore(path, { now = Date.now } = {}) {
       until_at=CASE WHEN until_at<=? THEN excluded.until_at ELSE until_at END`).run(key, now() + 15 * 60_000, now(), now());
   }
   return {
+    notificationFeed: notifications.feed,
+    notificationDetail: notifications.detail,
+    markNotificationsRead: notifications.markRead,
     setPassword,
     userByEmail(email) {
       return db.prepare('SELECT id,email FROM users WHERE email=?').get(String(email).trim().toLowerCase()) || null;

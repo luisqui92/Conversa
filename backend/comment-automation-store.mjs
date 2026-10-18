@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
+import { installNotifications } from './notifications.mjs';
 
 export const automationRuleVersion = rule => rule ? createHash('sha256').update(JSON.stringify([
   rule.account_id, rule.media_id, rule.public_text, rule.dm_text, rule.enabled, rule.enabled_at
@@ -36,6 +37,20 @@ export function openCommentAutomation(path, { now = Date.now, channel = 'instagr
       PRIMARY KEY(account_id,comment_id));
     CREATE INDEX IF NOT EXISTS automation_actions_status ON automation_actions(status,created_at);
     CREATE INDEX IF NOT EXISTS automation_actions_owner ON automation_actions(user_id,created_at);`);
+  installNotifications(connection);
+  // The notification and status transition commit together, including crash recovery.
+  // No backfill: installing the panel does not notify old completed actions.
+  db.exec(`CREATE TRIGGER IF NOT EXISTS automation_notify_result
+    AFTER UPDATE OF status ON automation_actions
+    WHEN OLD.status<>NEW.status AND (
+      (NEW.status='sent' AND NEW.public_id IS NOT NULL AND NEW.message_id IS NOT NULL)
+      OR NEW.status IN ('public_failed','dm_failed','public_unknown','dm_unknown'))
+    BEGIN
+      INSERT OR IGNORE INTO notifications
+        (event_key,user_id,channel,account_id,comment_id,media_id,status,created_at)
+      VALUES ('${channel}:'||NEW.account_id||':'||NEW.comment_id||':'||NEW.status,
+        NEW.user_id,'${channel}',NEW.account_id,NEW.comment_id,NEW.media_id,NEW.status,NEW.updated_at);
+    END;`);
   function rule(config, mediaId) {
     return db.prepare('SELECT * FROM automation_rules WHERE account_id=? AND media_id=? AND user_id=?').get(config.accountId, mediaId, config.ownerId);
   }
@@ -77,6 +92,11 @@ export function openCommentAutomation(path, { now = Date.now, channel = 'instagr
         const saved = rule(config, input.mediaId);
         return { ...saved, user_id: undefined, version: automationRuleVersion(saved) };
       } catch (error) { db.exec('ROLLBACK'); throw error; }
+    },
+    notificationAction(userId, accountId, commentId) {
+      return db.prepare(`SELECT account_id,comment_id,media_id,status,created_at,updated_at,
+        public_id,message_id,last_error,public_text,dm_text FROM automation_actions
+        WHERE user_id=? AND account_id=? AND comment_id=?`).get(userId, accountId, commentId) || null;
     },
     panelReport(userId, accountId) {
       const periodStart = now() - 7 * 86400_000;

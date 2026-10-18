@@ -13,7 +13,7 @@ for name in ['styles.css', 'campaigns.css', 'session.css', 'live-panel.css']:
     html = html.replace(f'<link rel="stylesheet" href="{name}">', '<style>' + css + '</style>')
 
 sources = []
-for name in ['engine.mjs', 'data.mjs', 'session.mjs', 'live-panel.mjs', 'app.mjs']:
+for name in ['engine.mjs', 'data.mjs', 'session.mjs', 'live-panel.mjs', 'notifications.mjs', 'app.mjs']:
     text = (root / 'dist' / name).read_text()
     text = re.sub(r'^import .*?;\s*$', '', text, flags=re.MULTILINE)
     text = re.sub(r'^export (?=(?:const|(?:async )?function)\b)', '', text, flags=re.MULTILINE)

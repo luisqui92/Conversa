@@ -33,6 +33,19 @@ Conserva `conversa-demo_conversa_data`, sus credenciales, usuarios, reglas y eve
 
 Abrir **https://cc.chatgo.ia.bo/#dashboard**, recargar e iniciar sesión con la cuenta existente. Verificar que aparezcan las cuentas configuradas y las reglas actuales antes de editar. No es necesario publicar otra app de Meta ni cambiar sus webhooks.
 
+## Notificaciones en el panel
+
+La campana de la barra superior reúne los resultados de Instagram y Facebook. Al confirmar tanto la respuesta pública como el DM, aparece **Respuesta pública y DM enviados**, con la aclaración de que Meta aceptó ambos envíos. Un rechazo o un resultado incierto genera un aviso diferente. La campana no confirma lectura ni notificación en la red social.
+
+- Los avisos se guardan en SQLite junto con la transición de estado; recibir el mismo evento o reiniciar no duplica el aviso.
+- Las novedades se consultan cada cinco segundos mientras la pestaña está visible. Si el panel ya estaba abierto, un aviso emergente anuncia los resultados nuevos. Con la pestaña cerrada se siguen guardando para la próxima sesión.
+- Abrir un aviso lleva al detalle de la actividad y marca ese aviso como leído. **Marcar todas como leídas** solo afecta a los avisos existentes hasta el último ID consultado, conservando los que lleguen durante la operación.
+- La lectura se conserva en el servidor para la cuenta del usuario, incluso entre navegadores. Cada usuario solo consulta avisos de las cuentas que tiene configuradas.
+- Se conservan durante siete días; la lista muestra los últimos treinta y el contador incluye todos los avisos pendientes del período. La depuración se realiza al consultar las notificaciones.
+- La instalación no genera avisos retroactivos por automatizaciones completadas antes de esta versión.
+
+Las rutas privadas son `GET /api/notifications`, `GET /api/notifications/:id` y `POST /api/notifications/read`. Marcar lectura exige sesión, JSON y el mismo origen, con los mismos controles que las otras mutaciones del panel. Los avisos no contienen tokens, claves ni copias de los mensajes.
+
 ## Guardar automatizaciones
 
 1. Entrar en **Automatizaciones** y elegir **Editar mensajes**, o **Nueva automatización**.
@@ -55,6 +68,7 @@ Pruebas nuevas de permisos, aislamiento, conflictos de reglas, conteos completos
 
 ```bash
 node backend/panel-checks.mjs
+node backend/notification-checks.mjs
 ```
 
 También se comprobaron en Chromium el inicio de sesión, navegación, filtros, detalle, edición, pausa/reactivación, creación de reglas, versión móvil de 390 px y conservación de la demo. La revisión usa SQLite temporal y datos ficticios; no envía mensajes a cuentas reales. El contenedor también se construyó: las pruebas del panel y GET /api/health pasaron dentro de la imagen. Las pruebas locales no sustituyen la verificación de la instalación en la VM.

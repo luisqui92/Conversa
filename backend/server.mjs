@@ -81,6 +81,33 @@ export function makeServer({ store, origin = 'https://cc.chatgo.ia.bo', instagra
       }
       const user = store.session(token(req));
       if (!user) return send(res, 401, { error: 'Inicia sesión para continuar.' });
+      function notificationAccounts() {
+        return [{ channel: 'instagram', config: instagram() }, { channel: 'facebook', config: facebook() }]
+          .filter(a => a.config?.ownerId === user.id)
+          .map(a => ({ channel: a.channel, accountId: a.config.accountId, username: a.config.username }));
+      }
+      function notificationFeed() {
+        const accounts = notificationAccounts();
+        const feed = store.notificationFeed(user.id, accounts);
+        return { ...feed, notifications: feed.notifications.map(n => ({ ...n,
+          accountName: accounts.find(a => a.channel === n.channel && a.accountId === n.account_id)?.username || '' })) };
+      }
+      if (req.method === 'GET' && path === '/api/notifications') return send(res, 200, notificationFeed());
+      if (req.method === 'POST' && path === '/api/notifications/read') {
+        const input = await body(req, 4096);
+        store.markNotificationsRead(user.id, notificationAccounts(), input);
+        return send(res, 200, notificationFeed());
+      }
+      const notificationRoute = /^\/api\/notifications\/([1-9][0-9]{0,15})$/.exec(path);
+      if (req.method === 'GET' && notificationRoute) {
+        const id = Number(notificationRoute[1]);
+        if (!Number.isSafeInteger(id)) return send(res, 404, { error: 'Notificación no disponible.' });
+        const notification = store.notificationDetail(user.id, notificationAccounts(), id);
+        if (!notification) return send(res, 404, { error: 'Notificación no disponible.' });
+        const queue = notification.channel === 'facebook' ? facebookAutomation : automation;
+        const action = queue?.notificationAction(user.id, notification.account_id, notification.comment_id) || null;
+        return send(res, 200, { notification, action });
+      }
       const ruleRoute = /^\/api\/integrations\/(instagram|facebook)\/automation$/.exec(path);
       if (ruleRoute && req.method === 'PUT') {
         const input = await body(req, 12_000);

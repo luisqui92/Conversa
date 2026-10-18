@@ -56,7 +56,7 @@ export function buildLiveActivity(channels) {
 export function createLivePanel({ root, toast, navigate, serverMode }) {
   let current = null, channels = {}, loading = false, loadedAt = null, selected = null;
   let channelFilter = 'all', resultFilter = 'all', query = '', editor = null, saving = false, needsReload = false;
-  let modal;
+  let modal, notificationActivity = null;
   const configured = () => Object.entries(channels).filter(([, c]) => c.account?.configured);
   const rules = () => configured().flatMap(([channel, c]) => (c.report?.rules || []).map(rule => ({ ...rule, channel })));
   const activities = () => buildLiveActivity(channels);
@@ -98,7 +98,7 @@ export function createLivePanel({ root, toast, navigate, serverMode }) {
       ${a.last_error ? `<div class="live-health notice"><strong>Requiere revisión</strong><p>${e(a.last_error)}</p></div>` : ''}<p class="live-disclaimer">Los estados muestran la confirmación de la API. No confirman entrega en la bandeja principal, lectura o notificación.</p>${a.comment_id ? `<details class="live-identifiers"><summary>Identificadores de la actividad</summary><p>Comentario: ${e(a.comment_id)}</p><p>Publicación: ${e(a.media_id)}</p>${a.public_id ? `<p>Respuesta: ${e(a.public_id)}</p>` : ''}</details>` : ''}</div>`;
   }
   function activityPage() {
-    const items = filteredActivity(), active = activities().find(a => a.key === selected);
+    const items = filteredActivity(), active = activities().find(a => a.key === selected) || (notificationActivity?.key === selected ? notificationActivity : null);
     return header('Tu actividad, en un solo lugar.', 'Comentarios, mensajes y resultados de tus conexiones reales.') +
       `<div class="live-filters"><label class="live-search"><span aria-hidden="true">⌕</span><input type="search" id="live-search" aria-label="Buscar actividad" placeholder="Buscar persona, comentario o publicación…" value="${e(query)}"></label><select id="live-channel-filter" aria-label="Filtrar canal"><option value="all">Todos los canales</option>${Object.entries(NETWORKS).map(([id, label]) => `<option value="${id}" ${id === channelFilter ? 'selected' : ''}>${label}</option>`).join('')}</select><select id="live-result-filter" aria-label="Filtrar resultado">${[['all', 'Todos los resultados'], ['sent', 'Respuesta + DM aceptados'], ['attention', 'Requieren atención'], ['incoming', 'Mensajes entrantes']].map(([id, label]) => `<option value="${id}" ${resultFilter === id ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
       <div class="live-activity-layout"><section class="live-activity-list"><div class="live-list-title"><h2>Conversaciones</h2><span>${items.length} registros disponibles</span></div><div id="live-results">${activityTable(items)}</div></section><aside class="live-detail" aria-label="Detalle de la actividad">${detail(active)}</aside></div><p class="live-disclaimer">Se consultan las últimas 20 entradas y 20 automatizaciones de cada canal. Las métricas del resumen incluyen todos los envíos conservados de los últimos 7 días.</p>`;
@@ -205,5 +205,9 @@ export function createLivePanel({ root, toast, navigate, serverMode }) {
     if (event.target.id === 'live-result-filter') { resultFilter = event.target.value; selected = null; render(); }
   });
   setInterval(() => { if (current && !document.hidden && !modal?.open && !root.querySelector('input:focus,select:focus,textarea:focus')) void refresh(); }, 15_000);
-  return { mount(page) { current = LIVE_PAGES[page] ? page : null; if (current) { render(); if (!loadedAt) void refresh(); } } };
+  return { openActivity(item) {
+    selected = `${item.channel}:comment:${suffix(item.comment_id)}`;
+    notificationActivity = { ...item, key: selected, kind: 'comment', author: 'Comentario de la comunidad', authorId: '', text: '' };
+    channelFilter = item.channel; resultFilter = 'all'; query = ''; navigate('activity'); void refresh();
+  }, mount(page) { current = LIVE_PAGES[page] ? page : null; if (current) { render(); if (!loadedAt) void refresh(); } } };
 }

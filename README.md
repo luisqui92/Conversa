@@ -13,7 +13,7 @@ Plataforma en desarrollo de ChatGo / Lukmi SRL para campañas por publicación y
 
 Se incluye un receptor de webhooks de Instagram y un asistente de configuración desde la VM para una cuenta profesional de prueba: [CONECTAR_INSTAGRAM.md](CONECTAR_INSTAGRAM.md). Requiere instalar esta versión, introducir credenciales y configurar Meta. No conecta automáticamente las cuentas.
 
-**El panel principal muestra actividad real de Instagram y Facebook.** Resumen, Actividad, Automatizaciones y Canales consultan las conexiones existentes del propietario. Permite editar los mensajes por publicación y pausar o reactivar reglas desde la web, con control de versiones. La demo anterior se conserva en **Explorar demo**, con sus datos de ejemplo. Consulta [PANEL_REAL.md](PANEL_REAL.md) para instalarlo y conocer sus límites.
+**El panel principal muestra actividad real de Instagram y Facebook.** Resumen, Actividad, Automatizaciones y Canales consultan las conexiones existentes del propietario. Permite editar los mensajes por publicación y pausar o reactivar reglas desde la web, con control de versiones. La campana guarda los resultados de cada automatización y los avisos pendientes de lectura, con actualización cada cinco segundos mientras el panel está visible. La demo anterior se conserva en **Explorar demo**, con sus datos de ejemplo. Consulta [PANEL_REAL.md](PANEL_REAL.md) para instalarlo y conocer sus límites.
 
 El flujo real responde primero al comentario y luego solicita un DM. Los resultados indican aceptación por la API, no lectura ni notificación. La vinculación inicial y renovación de credenciales siguen siendo administrativas; la respuesta manual a mensajes entrantes, IA, OAuth para clientes, Pixel y cobros siguen pendientes. Ver [AUTOMATIZAR_INSTAGRAM.md](AUTOMATIZAR_INSTAGRAM.md), [CONECTAR_FACEBOOK.md](CONECTAR_FACEBOOK.md) y [RENOVAR_FACEBOOK.md](RENOVAR_FACEBOOK.md).
 
@@ -44,6 +44,7 @@ node backend/instagram-checks.mjs
 node backend/instagram-automation-checks.mjs
 node backend/facebook-checks.mjs
 node backend/panel-checks.mjs
+node backend/notification-checks.mjs
 ```
 
 Pasan los 56 casos originales y las nuevas pruebas de autenticación, aislamiento, expiración, límites de acceso, persistencia, conflictos de guardado y cola de cambios del navegador. Las pruebas de rutas se ejecutan en proceso, sin sockets. El panel se comprobó en Chromium de escritorio y móvil con datos temporales, incluidos los cambios de reglas mediante la API real. El contenedor se construyó y pasó las pruebas del panel y su endpoint de salud. La instalación actualizada en la VM requiere comprobación después del despliegue.
