@@ -51,6 +51,10 @@ test('Varios clientes y cuentas del mismo canal: cifrado, propiedad y webhooks',
   const registry = openChannelAccounts(path, { key, now: () => now }),
     ig = openInstagramAutomation(path, { now: () => now }),
     fb = openFacebookAutomation(path, { now: () => now });
+  registry.setApp('instagram', '1797199674816532', {
+    appSecret: 'shared-app-secret',
+    verifyToken: 'verify-one',
+  });
   const first = registry.put('instagram', {
     ownerId: one.id,
     accountId: '17841411111111111',
@@ -171,6 +175,16 @@ test('Varios clientes y cuentas del mismo canal: cifrado, propiedad y webhooks',
         ig.enable(second, input.mediaId, 'Public two', 'DM two');
         ig.enable(extra, input.mediaId, 'Public extra', 'DM extra');
         now += 1000;
+        const originalAll = registry.all,
+          originalLookup = registry.lookup;
+        let lookups = 0;
+        registry.all = () => {
+          throw new Error('Webhook must not load every credential');
+        };
+        registry.lookup = (...args) => {
+          lookups++;
+          return originalLookup(...args);
+        };
         const payload = JSON.stringify({
           object: 'instagram',
           entry: [entry(first), entry(second), entry(extra)],
@@ -184,6 +198,9 @@ test('Varios clientes y cuentas del mismo canal: cifrado, propiedad y webhooks',
           ).status,
           200,
         );
+        assert.equal(lookups, 3);
+        registry.all = originalAll;
+        registry.lookup = originalLookup;
         assert.equal(ig.panelReport(one.id, first.accountId).summary.total, 1);
         assert.equal(ig.panelReport(two.id, second.accountId).summary.total, 1);
         assert.equal(ig.panelReport(one.id, extra.accountId).summary.total, 0);
