@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Activa tu acceso · Conversa</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/session.css" />
+  </head>
+  <body class="auth-screen">
+    <main class="auth-card">
+      <div class="auth-logo">conversa.</div>
+      <h1>Tu negocio empieza aquí.</h1>
+      <p id="invite-context">Comprobando tu invitación…</p>
+      <form id="activate-form" hidden>
+        <label class="field"
+          >Tu contraseña
+          <input
+            name="password"
+            type="password"
+            minlength="12"
+            maxlength="256"
+            required
+            autocomplete="new-password"
+          />
+        </label>
+        <label class="field"
+          >Repite tu contraseña
+          <input
+            name="confirmation"
+            type="password"
+            minlength="12"
+            maxlength="256"
+            required
+            autocomplete="new-password"
+          />
+        </label>
+        <p>Elige al menos 12 caracteres. Solo tú necesitas conocerla.</p>
+        <button class="btn primary" type="submit">Activar mi acceso</button>
+      </form>
+      <p id="invite-error" class="auth-error" role="alert"></p>
+      <a href="/">Ir a iniciar sesión</a>
+    </main>
+    <script type="module" src="/invite.mjs"></script>
+  </body>
+</html>

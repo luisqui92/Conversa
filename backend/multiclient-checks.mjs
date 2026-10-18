@@ -246,7 +246,6 @@ test('Varios clientes y cuentas del mismo canal: cifrado, propiedad y webhooks',
         const data = {
           name: 'Tercer negocio',
           email: 'three@example.test',
-          password: 'third-customer-password',
         };
         assert.equal(
           (await http(server, 'POST', '/api/admin/customers', data, headers(b))).status,
@@ -260,7 +259,21 @@ test('Varios clientes y cuentas del mismo canal: cifrado, propiedad y webhooks',
           (await http(server, 'POST', '/api/admin/customers', data, headers(a))).status,
           422,
         );
-        const c = store.login(data.email, data.password, 'test');
+        assert.equal(store.login(data.email, 'third-customer-password', 'test'), null);
+        const invitation = created.body.invitation.url.split('#')[1];
+        assert.equal(
+          (
+            await http(
+              server,
+              'POST',
+              '/api/invitations/accept',
+              { token: invitation, password: 'third-customer-password' },
+              headers(a),
+            )
+          ).status,
+          200,
+        );
+        const c = store.login(data.email, 'third-customer-password', 'test');
         assert.equal((await get('/api/channel-accounts', c)).body.accounts.length, 0);
         assert.equal((await get('/api/admin/customers', c)).status, 403);
       },
