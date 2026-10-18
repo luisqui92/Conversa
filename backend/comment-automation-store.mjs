@@ -1,4 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
+
+export const automationRuleVersion = rule => rule ? createHash('sha256').update(JSON.stringify([
+  rule.account_id, rule.media_id, rule.public_text, rule.dm_text, rule.enabled, rule.enabled_at
+])).digest('hex') : null;
 
 const numericId = value => typeof value === 'string' && /^\d{5,30}$/.test(value);
 const visibleText = (value, limit) => typeof value === 'string' && value.trim().length > 0 && value.length <= limit && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value);
@@ -47,6 +52,46 @@ export function openCommentAutomation(path, { now = Date.now, channel = 'instagr
     },
     disable(config, mediaId) {
       return db.prepare('UPDATE automation_rules SET enabled=0 WHERE account_id=? AND media_id=? AND user_id=?').run(config.accountId, mediaId, config.ownerId).changes;
+    },
+    saveRule(config, input) {
+      const invalid = message => Object.assign(new Error(message), { status: 422 });
+      if (!input || typeof input !== 'object' || !objectId(input.mediaId) ||
+          !visibleText(input.publicText, 1000) || !visibleText(input.dmText, 1000) ||
+          typeof input.enabled !== 'boolean' || !(input.expectedVersion === null ||
+          (typeof input.expectedVersion === 'string' && /^[a-f0-9]{64}$/.test(input.expectedVersion)))) {
+        throw invalid('Revisa el ID de publicación y los dos mensajes (de 1 a 1000 caracteres).');
+      }
+      if (channel === 'facebook' && input.mediaId.includes('_') && input.mediaId.split('_')[0] !== config.accountId) {
+        throw invalid('El ID de publicación debe corresponder a la página conectada.');
+      }
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const previous = rule(config, input.mediaId);
+        if (automationRuleVersion(previous) !== input.expectedVersion) {
+          throw Object.assign(new Error('Esta automatización cambió en otra pestaña. Actualiza y vuelve a abrirla.'), { status: 409 });
+        }
+        if (!previous && !input.enabled) throw invalid('Crea primero la automatización antes de pausarla.');
+        this.enable(config, input.mediaId, input.publicText, input.dmText);
+        if (!input.enabled) this.disable(config, input.mediaId);
+        db.exec('COMMIT');
+        const saved = rule(config, input.mediaId);
+        return { ...saved, user_id: undefined, version: automationRuleVersion(saved) };
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
+    },
+    panelReport(userId, accountId) {
+      const periodStart = now() - 7 * 86400_000;
+      const rules = db.prepare(`SELECT account_id,media_id,public_text,dm_text,enabled,enabled_at
+        FROM automation_rules WHERE user_id=? AND account_id=? ORDER BY enabled_at DESC`).all(userId, accountId)
+        .map(rule => ({ ...rule, version: automationRuleVersion(rule) }));
+      const actions = db.prepare(`SELECT account_id,comment_id,media_id,status,created_at,updated_at,
+        public_id,message_id,last_error,public_text,dm_text FROM automation_actions
+        WHERE user_id=? AND account_id=? AND created_at>=? ORDER BY created_at DESC,rowid DESC LIMIT 20`).all(userId, accountId, periodStart);
+      const summary = db.prepare(`SELECT count(*) AS total,
+        count(public_id) AS publicConfirmed, count(message_id) AS dmConfirmed,
+        coalesce(sum(status IN ('pending','public_sending','public_done','dm_sending')),0) AS pending,
+        coalesce(sum(status IN ('public_failed','dm_failed','public_unknown','dm_unknown')),0) AS attention
+        FROM automation_actions WHERE user_id=? AND account_id=? AND created_at>=?`).get(userId, accountId, periodStart);
+      return { rules, actions, summary, periodStart };
     },
     enqueue(config, entries) {
       let added = 0;

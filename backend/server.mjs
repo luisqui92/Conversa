@@ -81,6 +81,16 @@ export function makeServer({ store, origin = 'https://cc.chatgo.ia.bo', instagra
       }
       const user = store.session(token(req));
       if (!user) return send(res, 401, { error: 'Inicia sesión para continuar.' });
+      const ruleRoute = /^\/api\/integrations\/(instagram|facebook)\/automation$/.exec(path);
+      if (ruleRoute && req.method === 'PUT') {
+        const input = await body(req, 12_000);
+        // Re-read credentials after consuming the body: ownership can change during setup.
+        const config = ruleRoute[1] === 'facebook' ? facebook() : instagram();
+        const queue = ruleRoute[1] === 'facebook' ? facebookAutomation : automation;
+        if (!config || config.ownerId !== user.id || !queue) return send(res, 404, { error: 'Esta cuenta no tiene ese canal configurado.' });
+        queue.saveRule(config, input);
+        return send(res, 200, queue.panelReport(user.id, config.accountId));
+      }
       if (req.method === 'GET' && path === '/api/integrations/instagram') {
         const config = instagram();
         if (!config || config.ownerId !== user.id) return send(res, 200, { configured: false });
@@ -88,7 +98,10 @@ export function makeServer({ store, origin = 'https://cc.chatgo.ia.bo', instagra
         return send(res, 200, { configured: true, username: config.username, accountId: config.accountId, checkedAt: config.checkedAt, receivedEvents: store.instagramEventCount(user.id), mode: active ? 'comment-then-dm' : 'receive-only' });
       }
       if (req.method === 'GET' && path === '/api/integrations/instagram/events') return send(res, 200, { events: store.readInstagramEvents(user.id) });
-      if (req.method === 'GET' && path === '/api/integrations/instagram/automation') return send(res, 200, automation?.report(user.id) || { rules: [], actions: [] });
+      if (req.method === 'GET' && path === '/api/integrations/instagram/automation') {
+        const config = instagram();
+        return send(res, 200, config?.ownerId === user.id && automation ? automation.panelReport(user.id, config.accountId) : { rules: [], actions: [] });
+      }
       if (req.method === 'GET' && path === '/api/integrations/facebook') {
         const config = facebook();
         if (!config || config.ownerId !== user.id) return send(res, 200, { configured: false });
@@ -97,7 +110,10 @@ export function makeServer({ store, origin = 'https://cc.chatgo.ia.bo', instagra
         return send(res, 200, { configured:true, username:config.username, accountId:config.accountId, checkedAt:config.checkedAt, receivedEvents:store.facebookEventCount(user.id), mode:active ? 'comment-then-dm' : 'receive-only', tokenHealth:facebookCredentialStatus(config, report?.actions) });
       }
       if (req.method === 'GET' && path === '/api/integrations/facebook/events') return send(res, 200, { events:store.readFacebookEvents(user.id) });
-      if (req.method === 'GET' && path === '/api/integrations/facebook/automation') return send(res, 200, facebookAutomation?.report(user.id) || {rules:[],actions:[]});
+      if (req.method === 'GET' && path === '/api/integrations/facebook/automation') {
+        const config = facebook();
+        return send(res, 200, config?.ownerId === user.id && facebookAutomation ? facebookAutomation.panelReport(user.id, config.accountId) : { rules: [], actions: [] });
+      }
       if (req.method === 'GET' && path === '/api/session') return send(res, 200, { user });
       if (req.method === 'POST' && path === '/api/logout') {
         store.logout(token(req));

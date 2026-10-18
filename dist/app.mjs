@@ -1,11 +1,12 @@
 import { CHANNELS, PLANS, LEAD_STAGES, priceLabel, updateLeadStage, makeId, normalize, renderTemplate, validateCampaign, usage, processCampaignComment, receivePrivateMessage, receiveDirectMessage, manualReply, continuationAllowed, suggestDM } from './engine.mjs';
 import { newCampaign, createState, migrateLegacy, isValidState, upgradeIndustry } from './data.mjs';
 import { openConversaSession } from './session.mjs';
+import { createLivePanel, LIVE_PAGES } from './live-panel.mjs';
 
 const icons={inbox:'<path d="M4 4h16v16H4zM4 13h5l1 3h4l1-3h5"/>',spark:'<path d="m12 3 2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6L12 3Z"/>',link:'<path d="m10 13 4-4M8 15l-2 2a4 4 0 0 1-5-5l4-4a4 4 0 0 1 5 0m4 1 2-2a4 4 0 0 1 5 5l-4 4a4 4 0 0 1-5 0"/>',layers:'<path d="m12 3 10 5-10 5L2 8l10-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/>',help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4m0 3h.01"/>',plus:'<path d="M12 5v14M5 12h14"/>',search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',check:'<path d="m5 12 4 4L19 6"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',arrow:'<path d="M4 12h16m-6-6 6 6-6 6"/>',download:'<path d="M12 3v12m-5-5 5 5 5-5M4 15v5h16v-5"/>',message:'<path d="M21 15a3 3 0 0 1-3 3H8l-5 3V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v9Z"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>',play:'<path d="m9 5 11 7-11 7V5Z"/>',food:'<path d="M5 3v7m3-7v7m3-7v7M5 7h6m-3 3v11M18 3c-3 3-3 8 0 8V3Zm0 8v10"/>'};
 const icon=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]||icons.message}</svg>`;
 const esc=text=>String(text??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const titles={inbox:'Bandeja',campaigns:'Campañas por post',leads:'Prospectos',channels:'Canales',plans:'Plan y uso'};
+const titles={...LIVE_PAGES,inbox:'Bandeja',campaigns:'Campañas por post',leads:'Prospectos',channels:'Canales',plans:'Plan y uso'};
 const statusLabels={pending:'Tu equipo',automatic:'Automática',manual:'Manual',ignored:'Omitido'};
 const flowLabels={pending:'Pendiente',awaiting_team:'Necesita atención',awaiting_contact:'Esperando al cliente',blocked:'DM sin enviar',public_only:'Respuesta pública',closed:'Resuelto'};
 const validState=isValidState;
@@ -20,9 +21,12 @@ if(account.mode==='server'){
  data=validState(current)?current:previous?.version===1?migrateLegacy(previous):createState();
 }catch{data=createState();}
 data=upgradeIndustry(data);
-let page=titles[location.hash.slice(1)]?location.hash.slice(1):location.hash==='#rules'?'campaigns':'inbox';
+let page=titles[location.hash.slice(1)]?location.hash.slice(1):location.hash==='#rules'?'campaigns':account.mode==='server'?'dashboard':'inbox';
 let filter='all',channelFilter='all',query='',selected=workspace().events[0]?.id,threadTab='dm',draftCampaign=null,toastTimer,dialogSubmit=null;
 const main=document.getElementById('main'),dialog=document.getElementById('dialog'),form=document.getElementById('dialog-form');
+const livePanel=createLivePanel({root:main,toast,navigate,serverMode:account.mode==='server'});
+if(account.user)document.getElementById('live-owner').textContent=account.user.email;
+if(account.mode==='local')document.querySelector('.brand').href='#inbox';
 function workspace(){return data.workspaces[data.current];}
 function eventById(id=selected){return workspace().events.find(e=>e.id===id);}
 function save(){if(account.mode==='server'){account.save(data);return;}try{localStorage.setItem('conversa-demo-v2',JSON.stringify(data));}catch{toast('El navegador no permite guardar. Los cambios se conservan mientras esta página siga abierta.');}}
@@ -34,11 +38,17 @@ const heading=(title,subtitle,buttons='')=>`<div class="page-heading"><div><h1>$
 function hydrateIcons(){document.querySelectorAll('[data-icon]').forEach(e=>e.innerHTML=icon(e.dataset.icon));}
 function navigate(target){page=target;location.hash=target;render();}
 function render(){
+ const live=Boolean(LIVE_PAGES[page]);
+ document.body.classList.toggle('live-mode',live);document.body.classList.toggle('demo-mode',!live);
+ document.querySelector('.demo-tag').textContent=live&&account.mode==='server'?'ACTIVIDAD REAL':'SIMULADOR · DATOS DE EJEMPLO';
+ document.querySelector('.demo-nav').open=!live;
  document.querySelectorAll('[data-page]').forEach(e=>e.classList.toggle('active',e.dataset.page===page));
  const selector=document.getElementById('workspace');selector.innerHTML=Object.values(data.workspaces).map(w=>`<option value="${esc(w.id)}">${esc(w.label)}</option>`).join('')+'<option value="_new">＋ Nueva empresa</option>';selector.value=data.current;
  document.querySelector('.workspace-logo').textContent=workspace().label[0];
  document.getElementById('breadcrumb-page').textContent=titles[page];
  document.getElementById('nav-count').textContent=workspace().events.filter(e=>e.status==='pending' && e.conversation!=='closed').length;
+ if(live){livePanel.mount(page);hydrateIcons();return;}
+ livePanel.mount(null);
  main.innerHTML=({inbox:renderInbox,campaigns:renderCampaigns,leads:renderLeads,channels:renderChannels,plans:renderPlans})[page]();
  hydrateIcons();
 }
@@ -147,13 +157,14 @@ document.addEventListener('click',event=>{
  if(action==='simulate'||b.id==='sidebar-simulate')openSimulator();
  if(action==='new-campaign')openCampaign();
  if(action==='customer-message')customerMessage();
+ if(b.id==='help'&&LIVE_PAGES[page]){openDialog('Tu centro de operaciones','<p class="dialog-copy">Resumen reúne tus canales y métricas de los últimos 7 días. En Actividad puedes revisar comentarios, mensajes y el resultado de cada envío. Automatizaciones permite editar mensajes y activar o pausar publicaciones. Canales muestra las cuentas y el estado guardado de su autorización.</p>');return;}
  if(action==='guide'||b.id==='help')guide();
  if(action==='export')exportBackup();
  if(action==='import')document.getElementById('backup-input').click();
  if(action==='measurement')measurement();
  if(action==='resolve'){const e=eventById();if(e){e.conversation=e.conversation==='closed'?'awaiting_team':'closed';if(e.conversation!=='closed')e.status='pending';e.reason=e.conversation==='closed'?'Marcada como resuelta por tu equipo.':'Reabierta para tu equipo.';save();render();}}
  if(action==='use-suggestion'){document.getElementById('reply').value=document.querySelector('.suggested p')?.textContent||'';}
- if(b.id==='profile')openDialog('Conversa · Lukmi SRL',`<p class="dialog-copy">${account.mode==='server'?'Acceso autenticado. Las campañas y prospectos se guardan en el servidor, separados por usuario. Los ejemplos siguen siendo ficticios.':'Demo autónoma con guardado en este navegador.'}<br><br>Las redes y los cobros siguen sin conectar. Las respuestas se simulan con reglas; todavía no utiliza un modelo de IA. Los equipos con varios usuarios compartiendo una empresa siguen pendientes.</p>`);
+ if(b.id==='profile')openDialog('Conversa · Lukmi SRL',`<p class="dialog-copy">${account.mode==='server'?'Acceso autenticado. Las campañas y prospectos se guardan en el servidor, separados por usuario. Los ejemplos siguen siendo ficticios.':'Demo autónoma con guardado en este navegador.'}<br><br>Las conexiones reales de Instagram y Facebook se consultan y gestionan desde el centro de operaciones. Esta sección de demo conserva datos ficticios. Todavía no utiliza un modelo de IA ni cobra suscripciones. Los equipos con varios usuarios compartiendo una empresa siguen pendientes.</p>`);
 });
 form.addEventListener('submit',event=>{event.preventDefault();try{if(dialogSubmit&&dialogSubmit(new FormData(form))!==false)dialog.close();}catch(error){toast(error.message);}});
 form.addEventListener('input',()=>updateCampaignPreview());

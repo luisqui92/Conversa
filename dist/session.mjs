@@ -42,7 +42,7 @@ export async function openConversaSession() {
   document.body.classList.add('auth-pending');
   const screen = document.createElement('section');
   screen.className = 'auth-screen';
-  screen.innerHTML = '<div class="auth-card"><div class="auth-logo">conversa.</div><h1>Tu espacio de trabajo</h1><p>Inicia sesión para acceder a tus campañas y prospectos.</p><form id="account-login"><label class="field">Correo<input name="email" type="email" autocomplete="username" required maxlength="254"></label><label class="field">Contraseña<input name="password" type="password" autocomplete="current-password" required maxlength="256"></label><button class="btn primary" type="submit">Entrar</button></form><p class="auth-error" role="alert"></p><button class="btn auth-retry" type="button" hidden>Volver a intentar</button><p class="fine-print">Los accesos los crea el administrador. Las conexiones y mensajes de redes siguen en modo de prueba.</p><nav class="auth-legal" aria-label="Información legal"><a href="/privacidad/">Privacidad</a><a href="/terminos/">Condiciones</a><a href="/eliminar-datos/">Eliminar datos</a></nav></div>';
+  screen.innerHTML = '<div class="auth-card"><div class="auth-logo">conversa.</div><h1>Tu espacio de trabajo</h1><p>Inicia sesión para acceder a tus campañas y prospectos.</p><form id="account-login"><label class="field">Correo<input name="email" type="email" autocomplete="username" required maxlength="254"></label><label class="field">Contraseña<input name="password" type="password" autocomplete="current-password" required maxlength="256"></label><button class="btn primary" type="submit">Entrar</button></form><p class="auth-error" role="alert"></p><button class="btn auth-retry" type="button" hidden>Volver a intentar</button><p class="fine-print">Los accesos los crea el administrador. La actividad de los canales vinculados está disponible después de iniciar sesión.</p><nav class="auth-legal" aria-label="Información legal"><a href="/privacidad/">Privacidad</a><a href="/terminos/">Condiciones</a><a href="/eliminar-datos/">Eliminar datos</a></nav></div>';
   document.body.append(screen);
   const login = screen.querySelector('form'), note = screen.querySelector('.auth-error'), retry = screen.querySelector('.auth-retry');
   let user, loaded;
@@ -80,8 +80,8 @@ export async function openConversaSession() {
   const saved = document.createElement('span'); saved.className = 'account-save'; saved.textContent = 'Guardado en servidor'; saved.setAttribute('role', 'status');
   const again = document.createElement('button'); again.className = 'text-btn'; again.textContent = 'Reintentar guardado'; again.hidden = true;
   const logout = document.createElement('button'); logout.className = 'btn'; logout.textContent = 'Cerrar sesión';
-  const instagram = document.createElement('a'); instagram.href = '/instagram/'; instagram.textContent = 'Instagram: actividad real';
-  const facebook = document.createElement('a'); facebook.href = '/facebook/'; facebook.textContent = 'Facebook: actividad real';
+  const instagram = document.createElement('a'); instagram.href = '/#activity'; instagram.textContent = 'Instagram: actividad real';
+  const facebook = document.createElement('a'); facebook.href = '/#connections'; facebook.textContent = 'Facebook: actividad real';
   tools.append(identity, instagram, facebook, saved, again, logout);
   document.querySelector('.topbar').after(tools);
   const queue = createSaveQueue({ revision: loaded.revision, transport: async (payload, revision) => request('/api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': `"${revision}"` }, body: payload }), status(message, state, code) {

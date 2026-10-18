@@ -13,7 +13,9 @@ Plataforma en desarrollo de ChatGo / Lukmi SRL para campañas por publicación y
 
 Se incluye un receptor de webhooks de Instagram y un asistente de configuración desde la VM para una cuenta profesional de prueba: [CONECTAR_INSTAGRAM.md](CONECTAR_INSTAGRAM.md). Requiere instalar esta versión, introducir credenciales y configurar Meta. No conecta automáticamente las cuentas.
 
-**Los comentarios y DMs de la interfaz siguen siendo simulados.** El receptor registra eventos firmados. Un piloto separado puede responder primero al comentario y luego enviar un DM al activar una regla para una publicación desde la VM. No sincroniza estos resultados con la bandeja de demostración. Ver [AUTOMATIZAR_INSTAGRAM.md](AUTOMATIZAR_INSTAGRAM.md) y `/instagram/` para su activación y seguimiento. También se incluye una conexión piloto de página de Facebook y Messenger, con credenciales y reglas separadas: [CONECTAR_FACEBOOK.md](CONECTAR_FACEBOOK.md). Todavía no hay IA conectada, OAuth para clientes, Pixel activo ni cobros. Los planes y cuotas continúan siendo de prueba.
+**El panel principal muestra actividad real de Instagram y Facebook.** Resumen, Actividad, Automatizaciones y Canales consultan las conexiones existentes del propietario. Permite editar los mensajes por publicación y pausar o reactivar reglas desde la web, con control de versiones. La demo anterior se conserva en **Explorar demo**, con sus datos de ejemplo. Consulta [PANEL_REAL.md](PANEL_REAL.md) para instalarlo y conocer sus límites.
+
+El flujo real responde primero al comentario y luego solicita un DM. Los resultados indican aceptación por la API, no lectura ni notificación. La vinculación inicial y renovación de credenciales siguen siendo administrativas; la respuesta manual a mensajes entrantes, IA, OAuth para clientes, Pixel y cobros siguen pendientes. Ver [AUTOMATIZAR_INSTAGRAM.md](AUTOMATIZAR_INSTAGRAM.md), [CONECTAR_FACEBOOK.md](CONECTAR_FACEBOOK.md) y [RENOVAR_FACEBOOK.md](RENOVAR_FACEBOOK.md).
 
 ## Actualizar la VM de Google Cloud
 
@@ -41,13 +43,15 @@ node backend/checks.mjs
 node backend/instagram-checks.mjs
 node backend/instagram-automation-checks.mjs
 node backend/facebook-checks.mjs
+node backend/panel-checks.mjs
 ```
 
-Pasan los 56 casos originales y las nuevas pruebas de autenticación, aislamiento, expiración, límites de acceso, persistencia, conflictos de guardado y cola de cambios del navegador. Las pruebas de rutas se ejecutan en proceso, sin sockets. No se verificó el contenedor ni la interfaz en un navegador desde este entorno.
+Pasan los 56 casos originales y las nuevas pruebas de autenticación, aislamiento, expiración, límites de acceso, persistencia, conflictos de guardado y cola de cambios del navegador. Las pruebas de rutas se ejecutan en proceso, sin sockets. El panel se comprobó en Chromium de escritorio y móvil con datos temporales, incluidos los cambios de reglas mediante la API real. El contenedor se construyó y pasó las pruebas del panel y su endpoint de salud. La instalación actualizada en la VM requiere comprobación después del despliegue.
 
 ## Archivos principales
 
-- `dist/`: interfaz, simulador y cliente de sesión/guardado.
+- `dist/`: panel real, simulador y cliente de sesión/guardado.
+- `PANEL_REAL.md`: instalación y uso de Resumen, Actividad, Automatizaciones y Canales.
 - `backend/`: servidor HTTP, base SQLite, administración local y copia de seguridad.
 - `compose.vm.yaml`, `Caddyfile.vm`, `deploy-vm.sh`: despliegue en Google Cloud VM.
 - `ACTUALIZAR_BACKEND.md`: actualización, creación de usuarios y operación.

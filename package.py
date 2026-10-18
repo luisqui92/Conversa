@@ -1,16 +1,19 @@
 from pathlib import Path
 import re
+import base64
 import zipfile
 
 root = Path(__file__).resolve().parent
 html = (root / 'dist/index.html').read_text()
 html = html.replace('data-storage="server"', 'data-storage="local"')
-for name in ['styles.css', 'campaigns.css', 'session.css']:
+logo = base64.b64encode((root / 'dist/assets/conversa-logo-transparente.png').read_bytes()).decode('ascii')
+html = html.replace('src="/assets/conversa-logo-transparente.png"', 'src="data:image/png;base64,' + logo + '"')
+for name in ['styles.css', 'campaigns.css', 'session.css', 'live-panel.css']:
     css = (root / 'dist' / name).read_text()
     html = html.replace(f'<link rel="stylesheet" href="{name}">', '<style>' + css + '</style>')
 
 sources = []
-for name in ['engine.mjs', 'data.mjs', 'session.mjs', 'app.mjs']:
+for name in ['engine.mjs', 'data.mjs', 'session.mjs', 'live-panel.mjs', 'app.mjs']:
     text = (root / 'dist' / name).read_text()
     text = re.sub(r'^import .*?;\s*$', '', text, flags=re.MULTILINE)
     text = re.sub(r'^export (?=(?:const|(?:async )?function)\b)', '', text, flags=re.MULTILINE)
