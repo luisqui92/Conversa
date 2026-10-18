@@ -30,10 +30,10 @@ printf '%s\n' 'Se publicará Conversa con acceso por usuario y guardado en servi
 
 docker compose -f compose.vm.yaml config --quiet
 docker compose -f compose.vm.yaml build api
-docker compose -f compose.vm.yaml run --rm --no-deps web caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+docker compose -f compose.vm.yaml run --rm --no-deps --interactive=false web caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 # Stop the old worker before the transactional schema migration.
 docker compose -f compose.vm.yaml stop -t 60 api
-if ! docker compose -f compose.vm.yaml run --rm --no-deps init; then
+if ! docker compose -f compose.vm.yaml run --rm --no-deps --interactive=false init; then
   printf '%s\n' 'La migración falló; se conservó/restauró la base anterior. Se intenta reiniciar el contenedor anterior.' >&2
   docker start conversa-demo-api-1 || true
   exit 1

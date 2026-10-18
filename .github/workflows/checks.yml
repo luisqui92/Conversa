@@ -20,4 +20,4 @@ jobs:
       - run: npm test
       - run: docker build -f backend/Dockerfile -t conversa-check .
       - run: bash -n ops/backup-offsite.sh ops/check-restore.sh
-      - run: node --test ops/restore-script-checks.mjs
+      - run: node --test ops/restore-script-checks.mjs ops/deploy-stdin-checks.mjs
