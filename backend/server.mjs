@@ -88,19 +88,14 @@ export function makeServer({
       if (path === '/api/webhooks/instagram' || path === '/api/webhooks/facebook') {
         const isFacebook = path === '/api/webhooks/facebook';
         const channel = isFacebook ? 'facebook' : 'instagram';
-        const configs = registry
-          ? registry.all(channel)
-          : [isFacebook ? facebook() : instagram()].filter(Boolean);
-        const app = registry?.app(channel);
-        if (!configs.length && !app)
-          return send(res, 503, { error: `${channel} todavía no está configurado.` });
+        const legacy = registry ? null : isFacebook ? facebook() : instagram();
+        const app = registry ? registry.app(channel) : legacy;
+        if (!app) return send(res, 503, { error: `${channel} todavía no está configurado.` });
         if (req.method === 'GET') {
           const challenge = url.searchParams.get('hub.challenge');
           if (
             url.searchParams.get('hub.mode') !== 'subscribe' ||
-            ![app, ...configs]
-              .filter(Boolean)
-              .some((c) => equalSecret(url.searchParams.get('hub.verify_token'), c.verifyToken)) ||
+            !equalSecret(url.searchParams.get('hub.verify_token'), app.verifyToken) ||
             !challenge ||
             challenge.length > 1024
           )
@@ -115,11 +110,7 @@ export function makeServer({
         if (req.method !== 'POST')
           return send(res, 405, { error: 'Método no permitido.' }, { Allow: 'GET, POST' });
         const raw = await rawBody(req);
-        if (
-          ![app, ...configs]
-            .filter(Boolean)
-            .some((c) => validSignature(raw, req.headers['x-hub-signature-256'], c.appSecret))
-        )
+        if (!validSignature(raw, req.headers['x-hub-signature-256'], app.appSecret))
           return send(res, 403, { error: 'Firma no válida.' });
         let payload;
         try {
@@ -134,13 +125,20 @@ export function makeServer({
           payload.entry.length > 100
         )
           return send(res, 400, { error: 'Evento de la plataforma no válido.' });
-        // Entries from one HTTP delivery can belong to several independently owned accounts.
-        for (const config of configs) {
-          if (!validSignature(raw, req.headers['x-hub-signature-256'], config.appSecret)) continue;
-          const entries = payload.entry.filter(
-            (entry) => entry && String(entry.id) === config.accountId,
-          );
-          if (!entries.length) continue;
+        // One app signature authenticates the delivery; resolve only referenced accounts.
+        const grouped = new Map();
+        for (const entry of payload.entry) {
+          const id = String(entry?.id || '');
+          if (!/^\d{5,30}$/.test(id)) continue;
+          if (!grouped.has(id)) grouped.set(id, []);
+          grouped.get(id).push(entry);
+        }
+        for (const [accountId, entries] of grouped) {
+          const config = registry ? registry.lookup(channel, accountId) : legacy;
+          if (!config || config.accountId !== accountId) continue;
+          // A signed delivery must never cross application boundaries, even for a known entry ID.
+          if (!equalSecret(config.appSecret, app.appSecret)) continue;
+          if (registry && config.appId && config.appId !== app.appId) continue;
           if (isFacebook) {
             store.recordFacebookEntries(config.ownerId, entries);
             facebookAutomation?.enqueue(config, entries);
