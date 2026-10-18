@@ -4,7 +4,7 @@ Plataforma en desarrollo de Lukmi SRL para responder comentarios y enviar inform
 
 ## Funciones disponibles
 
-- Acceso privado por correo y contraseña. El administrador crea clientes en **Clientes**; cada cliente entra a su propio espacio. Un acceso propietario por negocio; los equipos con varios colaboradores aún no están implementados.
+- Acceso privado por correo y contraseña. El administrador crea clientes en **Clientes** y comparte una invitación privada de un solo uso; el cliente elige su contraseña y entra a su propio espacio. Un acceso propietario por negocio; los equipos con varios colaboradores aún no están implementados.
 - Conexión y reconexión mediante la autorización oficial de Meta desde **Canales**, con selección explícita de la página de Facebook.
 - Webhooks y workers que procesan varias cuentas sin mezclar credenciales, reglas, actividad ni notificaciones.
 - Reglas por publicación: respuesta pública primero y mensaje privado después. Filtros por palabras clave y pausa por persona/publicación, inicialmente 24 horas en las reglas nuevas del panel.

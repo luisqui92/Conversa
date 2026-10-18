@@ -64,8 +64,8 @@ Publicar la aplicación no concede automáticamente acceso avanzado. Para client
 
 ## Incorporar un cliente
 
-1. Administrador: **Clientes → Crear cliente**, introduce nombre comercial, correo y una contraseña inicial de al menos 12 caracteres. Comparte el acceso por un medio privado.
-2. Cliente: entra en Conversa con ese acceso; **Canales → Conectar Instagram / Conectar Facebook**.
+1. Administrador: **Clientes → Crear cliente**, introduce nombre comercial y correo. Copia el enlace de invitación y compártelo en privado. No se envía un correo automáticamente. El enlace caduca a las 24 horas y solo sirve una vez; no queda guardado como texto en el servidor. Si se pierde o vence, usa **Renovar invitación** mientras el acceso siga pendiente; el anterior deja de servir.
+2. Cliente: abre el enlace y elige su propia contraseña de 12 a 256 caracteres. Después inicia sesión y abre **Canales → Conectar Instagram / Conectar Facebook**. El administrador no elige ni recibe esa contraseña. Los accesos existentes conservan sus credenciales; renovar una invitación no permite cambiar un acceso ya activado.
 3. Autoriza los permisos en la página oficial de Meta. Conversa nunca pide la contraseña de Facebook o Instagram.
 4. En Facebook, vuelve al panel y selecciona expresamente la página autorizada. Las demás páginas no se conectan automáticamente. La selección caduca a los diez minutos.
 5. En **Automatizaciones**, selecciona la cuenta y publicación; configura comentario público, DM, palabras clave y tiempo mínimo entre respuestas a la misma persona en esa publicación.
