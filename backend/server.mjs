@@ -9,6 +9,7 @@ import { facebookCredentialStatus } from './facebook-token.mjs';
 import { openFacebookAutomation, createFacebookWorker } from './facebook-automation.mjs';
 import { openChannelAccounts, loadMasterKey } from './channel-accounts.mjs';
 import { createOAuth } from './oauth.mjs';
+import { readBackupStatus } from './offsite-backup.mjs';
 import { createCredentialMaintenance } from './credential-maintenance.mjs';
 
 export function makeServer({
@@ -285,7 +286,10 @@ export function makeServer({
           return send(res, 403, { error: 'Acceso reservado al administrador.' });
         return send(res, 200, {
           ...(operations?.() || { workers: [] }),
-          externalBackupConfigured: false,
+          externalBackupConfigured: readBackupStatus(
+            process.env.DATABASE_PATH || '/data/conversa.sqlite',
+          ).configured,
+          backup: readBackupStatus(process.env.DATABASE_PATH || '/data/conversa.sqlite'),
         });
       }
       if (registry && path === '/api/admin/customers') {

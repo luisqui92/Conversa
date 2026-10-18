@@ -110,6 +110,8 @@ No publicar salidas de archivos privados ni copiar tokens al chat o GitHub.
 
 ## Conservación y respaldos
 
+El procedimiento actualizado está en [respaldos externos y recuperación](respaldos.md): base en bucket privado, llave en Secret Manager con permisos separados y comprobación de restauración. No se activa automáticamente al desplegar.
+
 Acciones: 90 días; la API devuelve las últimas 50 del periodo seleccionado y sus agregados. Eventos de diagnóstico: siete días con límite de 2.000 por usuario/canal. Avisos del panel: siete días. Las limpiezas se realizan al recibir/consultar datos, no por una tarea de borrado independiente. No existe histórico ilimitado ni medición de conversiones comerciales.
 
 La migración y `backend/backup.mjs` crean **copias locales**, útiles para un error de actualización pero insuficientes ante pérdida del disco. Antes de incorporar datos comerciales, configura y comprueba una copia fuera de la VM que incluya **datos y llave**. Por ejemplo, una política de snapshots del disco de Google Cloud con acceso restringido, retención definida y prueba de restauración en otra VM; el disco debe incluir ambos volúmenes. Esa política no se crea ni se da por activa con este despliegue.
