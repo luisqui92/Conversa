@@ -1,0 +1,20 @@
+{
+  "name": "conversa",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "test": "node checks.mjs && node --test backend/*checks.mjs",
+    "lint": "eslint backend dist/*.mjs dist/instagram/*.mjs",
+    "format": "prettier --write 'backend/*.mjs' 'dist/*.mjs' 'dist/instagram/*.mjs' 'dist/*.css' 'dist/*.html' '*.json'",
+    "format:check": "prettier --check 'backend/*.mjs' 'dist/*.mjs' 'dist/instagram/*.mjs' 'dist/*.css' 'dist/*.html' '*.json'"
+  },
+  "devDependencies": {
+    "eslint": "10.13.0",
+    "globals": "16.5.0",
+    "prettier": "3.6.2"
+  }
+}

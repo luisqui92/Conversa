@@ -17,3 +17,7 @@ __pycache__/
 *.log
 conversa-campanas-y-conversaciones.json
 conversa-respaldo*
+
+*.enc
+migration-backups/
+AVANCE_CONVERSA.md

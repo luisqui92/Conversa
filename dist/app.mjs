@@ -1,197 +1,1000 @@
-import { CHANNELS, PLANS, LEAD_STAGES, priceLabel, updateLeadStage, makeId, normalize, renderTemplate, validateCampaign, usage, processCampaignComment, receivePrivateMessage, receiveDirectMessage, manualReply, continuationAllowed, suggestDM } from './engine.mjs';
+import {
+  CHANNELS,
+  PLANS,
+  LEAD_STAGES,
+  priceLabel,
+  updateLeadStage,
+  makeId,
+  normalize,
+  renderTemplate,
+  validateCampaign,
+  usage,
+  processCampaignComment,
+  receivePrivateMessage,
+  receiveDirectMessage,
+  manualReply,
+  continuationAllowed,
+  suggestDM,
+} from './engine.mjs';
 import { newCampaign, createState, migrateLegacy, isValidState, upgradeIndustry } from './data.mjs';
 import { openConversaSession } from './session.mjs';
 import { createLivePanel, LIVE_PAGES } from './live-panel.mjs';
 import { startPanelNotifications } from './notifications.mjs';
 
-const icons={inbox:'<path d="M4 4h16v16H4zM4 13h5l1 3h4l1-3h5"/>',spark:'<path d="m12 3 2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6L12 3Z"/>',link:'<path d="m10 13 4-4M8 15l-2 2a4 4 0 0 1-5-5l4-4a4 4 0 0 1 5 0m4 1 2-2a4 4 0 0 1 5 5l-4 4a4 4 0 0 1-5 0"/>',layers:'<path d="m12 3 10 5-10 5L2 8l10-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/>',help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4m0 3h.01"/>',plus:'<path d="M12 5v14M5 12h14"/>',search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',check:'<path d="m5 12 4 4L19 6"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',arrow:'<path d="M4 12h16m-6-6 6 6-6 6"/>',download:'<path d="M12 3v12m-5-5 5 5 5-5M4 15v5h16v-5"/>',message:'<path d="M21 15a3 3 0 0 1-3 3H8l-5 3V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v9Z"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>',play:'<path d="m9 5 11 7-11 7V5Z"/>',food:'<path d="M5 3v7m3-7v7m3-7v7M5 7h6m-3 3v11M18 3c-3 3-3 8 0 8V3Zm0 8v10"/>'};
-const icon=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]||icons.message}</svg>`;
-const esc=text=>String(text??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const titles={...LIVE_PAGES,inbox:'Bandeja',campaigns:'Campañas por post',leads:'Prospectos',channels:'Canales',plans:'Plan y uso'};
-const statusLabels={pending:'Tu equipo',automatic:'Automática',manual:'Manual',ignored:'Omitido'};
-const flowLabels={pending:'Pendiente',awaiting_team:'Necesita atención',awaiting_contact:'Esperando al cliente',blocked:'DM sin enviar',public_only:'Respuesta pública',closed:'Resuelto'};
-const validState=isValidState;
+const icons = {
+  inbox: '<path d="M4 4h16v16H4zM4 13h5l1 3h4l1-3h5"/>',
+  spark: '<path d="m12 3 2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6L12 3Z"/>',
+  link: '<path d="m10 13 4-4M8 15l-2 2a4 4 0 0 1-5-5l4-4a4 4 0 0 1 5 0m4 1 2-2a4 4 0 0 1 5 5l-4 4a4 4 0 0 1-5 0"/>',
+  layers: '<path d="m12 3 10 5-10 5L2 8l10-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4m0 3h.01"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  search: '<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',
+  check: '<path d="m5 12 4 4L19 6"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
+  arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
+  download: '<path d="M12 3v12m-5-5 5 5 5-5M4 15v5h16v-5"/>',
+  message: '<path d="M21 15a3 3 0 0 1-3 3H8l-5 3V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v9Z"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>',
+  play: '<path d="m9 5 11 7-11 7V5Z"/>',
+  food: '<path d="M5 3v7m3-7v7m3-7v7M5 7h6m-3 3v11M18 3c-3 3-3 8 0 8V3Zm0 8v10"/>',
+};
+const icon = (name) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.message}</svg>`;
+const esc = (text) =>
+  String(text ?? '').replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
+const titles = {
+  ...LIVE_PAGES,
+  inbox: 'Bandeja',
+  campaigns: 'Campañas por post',
+  leads: 'Prospectos',
+  channels: 'Canales',
+  plans: 'Plan y uso',
+};
+const statusLabels = {
+  pending: 'Tu equipo',
+  automatic: 'Automática',
+  manual: 'Manual',
+  ignored: 'Omitido',
+};
+const flowLabels = {
+  pending: 'Pendiente',
+  awaiting_team: 'Necesita atención',
+  awaiting_contact: 'Esperando al cliente',
+  blocked: 'DM sin enviar',
+  public_only: 'Respuesta pública',
+  closed: 'Resuelto',
+};
+const validState = isValidState;
 const account = await openConversaSession();
 let data;
-if(account.mode==='server'){
- if(!validState(account.state))throw new Error('Los datos del servidor requieren revisión. No se reemplazaron por datos locales.');
- data=account.state;
-}else try {
- const current=JSON.parse(localStorage.getItem('conversa-demo-v2')||'null');
- const previous=JSON.parse(localStorage.getItem('conversa-demo-v1')||'null');
- data=validState(current)?current:previous?.version===1?migrateLegacy(previous):createState();
-}catch{data=createState();}
-data=upgradeIndustry(data);
-let page=titles[location.hash.slice(1)]?location.hash.slice(1):location.hash==='#rules'?'campaigns':account.mode==='server'?'dashboard':'inbox';
-let filter='all',channelFilter='all',query='',selected=workspace().events[0]?.id,threadTab='dm',draftCampaign=null,toastTimer,dialogSubmit=null;
-const main=document.getElementById('main'),dialog=document.getElementById('dialog'),form=document.getElementById('dialog-form');
-const livePanel=createLivePanel({root:main,toast,navigate,serverMode:account.mode==='server'});
-if(account.mode==='server')startPanelNotifications({toast,onOpen:activity=>livePanel.openActivity(activity)});
-if(account.user)document.getElementById('live-owner').textContent=account.user.email;
-if(account.mode==='local')document.querySelector('.brand').href='#inbox';
-function workspace(){return data.workspaces[data.current];}
-function eventById(id=selected){return workspace().events.find(e=>e.id===id);}
-function save(){if(account.mode==='server'){account.save(data);return;}try{localStorage.setItem('conversa-demo-v2',JSON.stringify(data));}catch{toast('El navegador no permite guardar. Los cambios se conservan mientras esta página siga abierta.');}}
-function toast(message){const node=document.getElementById('toast');node.textContent=message;node.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>node.classList.remove('show'),5000);}
-function platform(channel){return `<span class="platform-badge"><span class="platform-mark ${channel.toLowerCase()}">${({TikTok:'♪',Instagram:'◎',Facebook:'f'})[channel]||'•'}</span>${esc(channel)}</span>`;}
-function status(e){return `<span class="status ${e.status} ${e.conversation==='blocked'?'blocked':''}">${e.conversation==='blocked'?'!':e.status==='automatic'?'✦':e.status==='manual'?'✓':'◷'} ${e.conversation==='blocked'?'DM pendiente':statusLabels[e.status]||'Pendiente'}</span>`;}
-const time=at=>new Date(at).toLocaleTimeString('es-BO',{hour:'2-digit',minute:'2-digit'});
-const heading=(title,subtitle,buttons='')=>`<div class="page-heading"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="heading-actions">${buttons}</div></div>`;
-function hydrateIcons(){document.querySelectorAll('[data-icon]').forEach(e=>e.innerHTML=icon(e.dataset.icon));}
-function navigate(target){page=target;location.hash=target;render();}
-function render(){
- const live=Boolean(LIVE_PAGES[page]);
- document.body.classList.toggle('live-mode',live);document.body.classList.toggle('demo-mode',!live);
- document.querySelector('.demo-tag').textContent=live&&account.mode==='server'?'ACTIVIDAD REAL':'SIMULADOR · DATOS DE EJEMPLO';
- document.querySelector('.demo-nav').open=!live;
- document.querySelectorAll('[data-page]').forEach(e=>e.classList.toggle('active',e.dataset.page===page));
- const selector=document.getElementById('workspace');selector.innerHTML=Object.values(data.workspaces).map(w=>`<option value="${esc(w.id)}">${esc(w.label)}</option>`).join('')+'<option value="_new">＋ Nueva empresa</option>';selector.value=data.current;
- document.querySelector('.workspace-logo').textContent=workspace().label[0];
- document.getElementById('breadcrumb-page').textContent=titles[page];
- document.getElementById('nav-count').textContent=workspace().events.filter(e=>e.status==='pending' && e.conversation!=='closed').length;
- if(live){livePanel.mount(page);hydrateIcons();return;}
- livePanel.mount(null);
- main.innerHTML=({inbox:renderInbox,campaigns:renderCampaigns,leads:renderLeads,channels:renderChannels,plans:renderPlans})[page]();
- hydrateIcons();
+if (account.mode === 'server') {
+  if (!validState(account.state))
+    throw new Error(
+      'Los datos del servidor requieren revisión. No se reemplazaron por datos locales.',
+    );
+  data = account.state;
+} else
+  try {
+    const current = JSON.parse(localStorage.getItem('conversa-demo-v2') || 'null');
+    const previous = JSON.parse(localStorage.getItem('conversa-demo-v1') || 'null');
+    data = validState(current)
+      ? current
+      : previous?.version === 1
+        ? migrateLegacy(previous)
+        : createState();
+  } catch {
+    data = createState();
+  }
+data = upgradeIndustry(data);
+let page = titles[location.hash.slice(1)]
+  ? location.hash.slice(1)
+  : location.hash === '#rules'
+    ? 'campaigns'
+    : account.mode === 'server'
+      ? 'dashboard'
+      : 'inbox';
+let filter = 'all',
+  channelFilter = 'all',
+  query = '',
+  selected = workspace().events[0]?.id,
+  threadTab = 'dm',
+  draftCampaign = null,
+  toastTimer,
+  dialogSubmit = null;
+const main = document.getElementById('main'),
+  dialog = document.getElementById('dialog'),
+  form = document.getElementById('dialog-form');
+const livePanel = createLivePanel({
+  root: main,
+  toast,
+  navigate,
+  serverMode: account.mode === 'server',
+  user: account.user || {},
+});
+if (account.mode === 'server')
+  startPanelNotifications({ toast, onOpen: (activity) => livePanel.openActivity(activity) });
+document.querySelector('[data-page="customers"]').hidden = !account.user?.admin;
+if (account.user) document.getElementById('live-owner').textContent = account.user.email;
+if (account.mode === 'local') document.querySelector('.brand').href = '#inbox';
+function workspace() {
+  return data.workspaces[data.current];
 }
-function renderInbox(){
- const ws=workspace(),comments=ws.events.filter(e=>e.source==='comment').length,dmThreads=ws.events.filter(e=>e.messages.some(m=>m.type==='dm'&&m.sender==='business')).length,pending=ws.events.filter(e=>e.status==='pending'&&e.conversation!=='closed').length;
- return heading(ws.kind==='realestate'?'De tu publicación a la próxima visita.':'Del comentario a la conversación.','El contenido de cada publicación, en el DM correcto.',`<button class="btn" data-action="guide">${icon('play')}Guion de demo</button><button class="btn primary" data-action="simulate">${icon('plus')}Simular interacción</button>`)+
- `<div class="hero"><div><span class="eyebrow">${ws.kind==='realestate'?'EL INMUEBLE CORRECTO. EL PROSPECTO CORRECTO.':'TU POST. TU OFERTA. TU CONVERSACIÓN.'}</span><h2>«¿Cuál es el precio?» ya tiene respuesta.</h2><p>${ws.kind==='realestate'?'Precio, zona y características del inmueble que le interesa.<br>Venta · Alquiler · Anticrético':'Elige la publicación, configura sus detalles y atiende desde aquí.<br>Instagram · Facebook · TikTok'}</p><div class="hero-flow"><span>Comentario</span><b>→</b><span>Ficha por DM</span><b>→</b><span>${ws.kind==='realestate'?'Solicitud de visita':'Conversación'}</span></div></div><div class="hero-art" aria-hidden="true"><span class="bubble">⌂</span><span class="bubble second">Te paso la ficha 💬</span></div></div>
- <div class="stats">${[['Comentarios',comments,'Interacciones de ejemplo','message',''],['Conversaciones con DM',dmThreads,'Mensajes enviados en la simulación','spark','green'],['Necesitan atención',pending,'Consultas para tu equipo','clock',''],['Campañas activas',ws.campaigns.filter(c=>c.active&&(!c.expiresAt||new Date(c.expiresAt)>=new Date())).length,'Una ficha por publicación','food','']].map(([label,value,note,i,color])=>`<div class="stat"><div class="stat-label">${label}${icon(i)}</div><div class="stat-num">${value}</div><div class="stat-note ${color}">${note}</div></div>`).join('')}</div>
- <section class="inbox-layout" aria-label="Bandeja de conversaciones"><div class="list-side"><div class="list-title"><h2>Conversaciones</h2><span>${ws.events.length} hilos de prueba</span></div><div class="search-wrap">${icon('search')}<input id="search" type="search" placeholder="Buscar persona, mensaje o publicación…" aria-label="Buscar conversaciones" value="${esc(query)}"></div><div class="filters">${[['all','Todas'],['dm','Con DM'],['pending','Tu equipo'],['closed','Resueltas']].map(([id,label])=>`<button class="chip ${filter===id?'active':''}" data-filter="${id}">${label}</button>`).join('')}<select id="channel-filter" aria-label="Filtrar canal"><option value="all">Todos los canales</option>${CHANNELS.map(c=>`<option ${channelFilter===c?'selected':''}>${c}</option>`).join('')}</select></div><div class="comment-list" id="comment-list">${listEvents()}</div></div><div id="detail">${renderDetail()}</div></section>`;
+function eventById(id = selected) {
+  return workspace().events.find((e) => e.id === id);
 }
-function filtered(){return workspace().events.filter(e=>(filter==='all'||filter==='dm'&&e.messages.some(m=>m.type==='dm')||filter==='pending'&&e.status==='pending'&&e.conversation!=='closed'||filter==='closed'&&e.conversation==='closed')&&(channelFilter==='all'||e.channel===channelFilter)&&normalize(`${e.name} ${e.text} ${e.postTitle} ${e.messages.map(m=>m.text).join(' ')}`).includes(normalize(query)));}
-function listEvents(){const entries=filtered();return entries.length?entries.map(e=>`<button class="comment-item ${selected===e.id?'selected':''}" data-event="${esc(e.id)}"><span class="avatar">${esc(e.initials||e.name.slice(0,2).toUpperCase())}</span><div class="comment-body"><div class="comment-top"><span class="comment-name">${esc(e.name)}</span><span class="comment-time">${time(e.messages.at(-1)?.at||e.at)}</span></div><p class="comment-text">${esc(e.messages.at(-1)?.text||e.text)}</p><div class="list-post">${esc(e.postTitle||'Mensaje directo · Sin publicación asociada')}</div><div class="comment-bottom">${platform(e.channel)}${status(e)}</div></div></button>`).join(''):'<div class="empty">No hay conversaciones con este filtro.<br>Prueba una interacción o elige otro canal.</div>';}
-function renderDetail(){
- const e=eventById();if(!e)return '<div class="empty">Selecciona una conversación para ver sus comentarios y mensajes privados.</div>';
- const privateMessages=e.messages.filter(m=>m.type==='dm'),publicMessages=e.messages.filter(m=>m.type==='public');
- const tab=e.source==='dm'?'dm':threadTab;
- const canReplyDM=continuationAllowed(e);
- const mode=tab==='public'&&e.source==='comment'?'public':'dm';
- const lastCustomer=privateMessages.filter(m=>m.sender==='contact').at(-1);
- const currentCampaign=workspace().campaigns.find(c=>c.id===e.campaignId && c.postId===e.postId && c.channel===e.channel && c.active && (!c.expiresAt||new Date(c.expiresAt)>=new Date()));
- const suggestion=lastCustomer&&currentCampaign?suggestDM(lastCustomer.text,currentCampaign):'';
- return `<div class="detail-header"><span>${platform(e.channel)}</span><button class="text-btn" data-action="resolve">${e.conversation==='closed'?'Reabrir conversación':'✓ Resolver'}</button></div>
- <div class="detail-content"><div class="post-mini"><span class="post-art ${e.channel.toLowerCase()} ${e.snapshot?.vertical==='realestate'?'property':''}" aria-hidden="true"></span><div><p>${esc(e.postTitle||'Mensaje privado entrante')}</p><small>${esc(workspace().label)}${e.snapshot?` · ${esc(priceLabel(e.snapshot))}${e.snapshot.operation==='Alquiler'?' / mes':''}`:''}</small></div>${e.campaignId?`<button class="icon-button" data-edit-campaign="${esc(e.campaignId)}" aria-label="Editar publicación">${icon('layers')}</button>`:''}</div>
- <div class="lead-summary"><span class="lead-stage ${esc(e.leadStage||'new')}">${esc(LEAD_STAGES[e.leadStage||'new'])}</span><button class="text-btn" data-lead="${esc(e.id)}">Actualizar seguimiento ↗</button></div>
- <div class="thread-tabs">${e.source==='comment'?`<button class="${tab==='public'?'active':''}" data-thread="public">Comentario público <span>${publicMessages.length}</span></button>`:''}<button class="${tab==='dm'?'active':''}" data-thread="dm">Mensajes privados <span>${privateMessages.length}</span></button></div>
- <div class="flow-state ${e.conversation==='blocked'?'warning':''}"><span class="green-dot"></span>${flowLabels[e.conversation]||'Pendiente'}<small>${esc(e.reason)}</small></div>
- <div class="thread-messages">${tab==='public'?`<div class="thread-row"><span class="avatar">${esc(e.initials||'C')}</span><div><p class="thread-label">${esc(e.name)}<span>Comentario · ${time(e.at)}</span></p><p class="thread-bubble">${esc(e.text)}</p></div></div>${publicMessages.map(m=>renderMessage(m,e)).join('')}`:privateMessages.map(m=>renderMessage(m,e)).join('')||`<div class="empty dm-empty">${icon('message')}<p>${e.conversation==='blocked'?'El mensaje privado no se envió. La respuesta pública invita a la persona a escribir primero.':'Aquí aparecerá la conversación privada cuando se envíe un DM o la persona escriba.'}</p></div>`}</div>
- ${e.source==='comment'||privateMessages.length?`<button class="btn customer-reply" data-action="customer-message">${icon('plus')}Simular mensaje del cliente</button>`:''}
- ${suggestion&&e.status==='pending'&&mode==='dm'?`<div class="suggested"><small>Sugerencia basada en esta publicación</small><p>${esc(suggestion)}</p><button class="text-btn" data-action="use-suggestion">Usar respuesta ↗</button></div>`:''}
- <form class="composer" id="reply-form"><input type="hidden" name="type" value="${mode}"><label for="reply">${mode==='public'?'Respuesta pública de prueba':'Responder por mensaje privado'}</label><textarea id="reply" name="reply" maxlength="1000" required ${mode==='dm'&&!canReplyDM?'disabled':''} placeholder="${mode==='dm'&&!canReplyDM?'Espera un mensaje del cliente para continuar por DM.':'Escribe tu respuesta…'}"></textarea><div class="composer-bottom"><span>${mode==='public'?'Comentario público':canReplyDM?'El cliente ya inició o respondió el DM':'Esperando respuesta del cliente'}</span><button class="btn primary" type="submit" ${mode==='dm'&&!canReplyDM?'disabled':''}>Guardar respuesta ${icon('arrow')}</button></div></form>
- <details class="activity"><summary>Actividad de la conversación</summary>${e.timeline.map(t=>`<p><small>${time(t.at)}</small> ${esc(t.text)}</p>`).join('')}</details><p class="demo-note">Prototipo · Los mensajes no se envían a las redes sociales.</p></div>`;
+function save() {
+  if (account.mode === 'server') {
+    account.save(data);
+    return;
+  }
+  try {
+    localStorage.setItem('conversa-demo-v2', JSON.stringify(data));
+  } catch {
+    toast(
+      'El navegador no permite guardar. Los cambios se conservan mientras esta página siga abierta.',
+    );
+  }
 }
-function renderMessage(m,e){return `<div class="${m.sender==='business'?'reply-row':'thread-row incoming-dm'}">${m.sender==='contact'?`<span class="avatar">${esc(e.initials||'C')}</span>`:''}<div><p class="thread-label">${esc(m.sender==='business'?workspace().label:e.name)}<span>${m.origin==='automation'?'Automatización':m.sender==='business'?'Tu equipo':'Cliente'} · ${time(m.at)}</span></p><p class="thread-bubble">${esc(m.text)}</p>${m.type==='dm'&&m.sender==='business'?'<div class="delivery-check">✓ Guardado en la simulación</div>':''}</div></div>`;}
-function renderCampaigns(){
- return heading(workspace().kind==='realestate'?'Cada inmueble tiene su conversación.':'Cada post tiene su respuesta.',workspace().kind==='realestate'?'Ficha, operación, zona y precio específicos para cada publicación.':'Precio, detalles y mensajes específicos para cada publicación.',`<button class="btn" data-action="simulate">${icon('play')}Probar flujo</button><button class="btn primary" data-action="new-campaign">${icon('plus')}Nueva campaña</button>`)+
- `<div class="info-banner">${icon('info')}<div>La campaña se elige por la publicación comentada. Sus datos se conservan en la conversación para evitar mezclar promociones. ${workspace().campaigns.length?'':'Crea una campaña para empezar.'}</div></div>
- <div class="campaigns-grid">${workspace().campaigns.map(c=>{
- const expired=c.expiresAt&&new Date(c.expiresAt)<new Date(),count=workspace().events.filter(e=>e.campaignId===c.id).length;
- let privatePreview;try{privatePreview=renderTemplate(c.privateTemplate,c,'María',workspace().label);}catch(error){privatePreview=error.message;}
- return `<article class="campaign-card"><div class="campaign-cover ${c.channel.toLowerCase()} ${c.vertical==='realestate'?'property-cover':''}"><span class="cover-eyebrow">${c.vertical==='realestate'?esc(c.operation)+' · INMUEBLE DE EJEMPLO':'PUBLICACIÓN DE EJEMPLO'}</span><span class="cover-title">${esc(c.product)}</span><span class="cover-price">${esc(priceLabel(c))}<small>${c.operation==='Alquiler'?'/ mes':c.channel}</small></span><span class="${c.vertical==='realestate'?'cover-building':'cover-plate'}" aria-hidden="true">${c.vertical==='realestate'?'⌂':'✦'}</span></div><div class="campaign-inner"><div class="card-top">${platform(c.channel)}<button class="toggle ${c.active?'on':''}" data-toggle-campaign="${esc(c.id)}" role="switch" aria-checked="${c.active}" aria-label="${c.active?'Pausar':'Activar'} ${esc(c.title)}"></button></div><h3>${esc(c.title)}</h3>${c.vertical==='realestate'?`<p class="property-location">${esc(c.location)}</p><div class="property-specs"><span>${esc(c.area)} m²</span><span>${esc(c.bedrooms)} dormitorios</span><span>${esc(c.bathrooms)} baños</span></div>`:''}<p class="campaign-description">${esc(c.description)}</p><div class="campaign-hours">${icon('clock')}${esc(c.hours)}</div><div class="tags">${c.anyComment?'<span>Cualquier comentario</span>':c.keywords.map(k=>`<span>${esc(k)}</span>`).join('')}</div><div class="rule-preview"><small>${c.action==='both'?'Mensaje privado':'Respuesta pública'}</small>${esc(c.action==='both'?privatePreview:c.publicTemplate)}</div><div class="campaign-foot"><span>${c.availability&&c.availability!=='available'?'Requiere asesor · '+({reserved:'Reservado',closed:'Cerrado'}[c.availability]):expired?'Vigencia terminada':c.active?'Activa · '+count+' interacciones':'Pausada'}${c.channel==='TikTok'&&c.action==='both'?' · DM por validar':''}</span></div><div class="card-actions"><button class="btn primary" data-test-campaign="${esc(c.id)}">${icon('play')}Probar</button><button class="btn" data-edit-campaign="${esc(c.id)}">Editar</button><button class="icon-button" data-delete-campaign="${esc(c.id)}" aria-label="Eliminar campaña">✕</button></div></div></article>`;
- }).join('')||'<div class="panel empty rules-empty">Todavía no hay publicaciones configuradas.<br>Crea una campaña y completa sus detalles.</div>'}</div>`;
+function toast(message) {
+  const node = document.getElementById('toast');
+  node.textContent = message;
+  node.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => node.classList.remove('show'), 5000);
 }
-function renderLeads(){
- const leads=workspace().events.filter(e=>e.status!=='ignored');
- const counts={new:0,contacted:0,qualified:0,visit_requested:0,visit_confirmed:0,won:0,lost:0};
- leads.forEach(e=>counts[e.leadStage||'new']++);
- return heading('Del interés al seguimiento.','Cada prospecto conserva el inmueble o publicación que le interesa.',`<button class="btn" data-action="measurement">${icon('layers')}Medición con Meta</button><button class="btn primary" data-action="simulate">${icon('plus')}Nuevo prospecto de prueba</button>`)+
- `<div class="stats">${[['Nuevos',counts.new,'Por contactar'],['Calificados',counts.qualified,'Revisados por tu equipo'],['Visitas solicitadas',counts.visit_requested,'Pendientes de confirmar'],['Cierres registrados',counts.won,'Resultados marcados por tu equipo']].map(([label,count,note])=>`<div class="stat"><div class="stat-label">${label}${icon('message')}</div><div class="stat-num">${count}</div><div class="stat-note">${note}</div></div>`).join('')}</div>
+function platform(channel) {
+  return `<span class="platform-badge"><span class="platform-mark ${channel.toLowerCase()}">${{ TikTok: '♪', Instagram: '◎', Facebook: 'f' }[channel] || '•'}</span>${esc(channel)}</span>`;
+}
+function status(e) {
+  return `<span class="status ${e.status} ${e.conversation === 'blocked' ? 'blocked' : ''}">${e.conversation === 'blocked' ? '!' : e.status === 'automatic' ? '✦' : e.status === 'manual' ? '✓' : '◷'} ${e.conversation === 'blocked' ? 'DM pendiente' : statusLabels[e.status] || 'Pendiente'}</span>`;
+}
+const time = (at) =>
+  new Date(at).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
+const heading = (title, subtitle, buttons = '') =>
+  `<div class="page-heading"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="heading-actions">${buttons}</div></div>`;
+function hydrateIcons() {
+  document.querySelectorAll('[data-icon]').forEach((e) => (e.innerHTML = icon(e.dataset.icon)));
+}
+function navigate(target) {
+  page = target;
+  location.hash = target;
+  render();
+}
+function render() {
+  const live = Boolean(LIVE_PAGES[page]);
+  document.body.classList.toggle('live-mode', live);
+  document.body.classList.toggle('demo-mode', !live);
+  document.querySelector('.demo-tag').textContent =
+    live && account.mode === 'server' ? 'ACTIVIDAD REAL' : 'SIMULADOR · DATOS DE EJEMPLO';
+  document.querySelector('.demo-nav').open = !live;
+  document
+    .querySelectorAll('[data-page]')
+    .forEach((e) => e.classList.toggle('active', e.dataset.page === page));
+  const selector = document.getElementById('workspace');
+  selector.innerHTML =
+    Object.values(data.workspaces)
+      .map((w) => `<option value="${esc(w.id)}">${esc(w.label)}</option>`)
+      .join('') + '<option value="_new">＋ Nueva empresa</option>';
+  selector.value = data.current;
+  document.querySelector('.workspace-logo').textContent = workspace().label[0];
+  document.getElementById('breadcrumb-page').textContent = titles[page];
+  document.getElementById('nav-count').textContent = workspace().events.filter(
+    (e) => e.status === 'pending' && e.conversation !== 'closed',
+  ).length;
+  if (live) {
+    livePanel.mount(page);
+    hydrateIcons();
+    return;
+  }
+  livePanel.mount(null);
+  main.innerHTML = {
+    inbox: renderInbox,
+    campaigns: renderCampaigns,
+    leads: renderLeads,
+    channels: renderChannels,
+    plans: renderPlans,
+  }[page]();
+  hydrateIcons();
+}
+function renderInbox() {
+  const ws = workspace(),
+    comments = ws.events.filter((e) => e.source === 'comment').length,
+    dmThreads = ws.events.filter((e) =>
+      e.messages.some((m) => m.type === 'dm' && m.sender === 'business'),
+    ).length,
+    pending = ws.events.filter((e) => e.status === 'pending' && e.conversation !== 'closed').length;
+  return (
+    heading(
+      ws.kind === 'realestate'
+        ? 'De tu publicación a la próxima visita.'
+        : 'Del comentario a la conversación.',
+      'El contenido de cada publicación, en el DM correcto.',
+      `<button class="btn" data-action="guide">${icon('play')}Guion de demo</button><button class="btn primary" data-action="simulate">${icon('plus')}Simular interacción</button>`,
+    ) +
+    `<div class="hero"><div><span class="eyebrow">${ws.kind === 'realestate' ? 'EL INMUEBLE CORRECTO. EL PROSPECTO CORRECTO.' : 'TU POST. TU OFERTA. TU CONVERSACIÓN.'}</span><h2>«¿Cuál es el precio?» ya tiene respuesta.</h2><p>${ws.kind === 'realestate' ? 'Precio, zona y características del inmueble que le interesa.<br>Venta · Alquiler · Anticrético' : 'Elige la publicación, configura sus detalles y atiende desde aquí.<br>Instagram · Facebook · TikTok'}</p><div class="hero-flow"><span>Comentario</span><b>→</b><span>Ficha por DM</span><b>→</b><span>${ws.kind === 'realestate' ? 'Solicitud de visita' : 'Conversación'}</span></div></div><div class="hero-art" aria-hidden="true"><span class="bubble">⌂</span><span class="bubble second">Te paso la ficha 💬</span></div></div>
+ <div class="stats">${[
+   ['Comentarios', comments, 'Interacciones de ejemplo', 'message', ''],
+   ['Conversaciones con DM', dmThreads, 'Mensajes enviados en la simulación', 'spark', 'green'],
+   ['Necesitan atención', pending, 'Consultas para tu equipo', 'clock', ''],
+   [
+     'Campañas activas',
+     ws.campaigns.filter((c) => c.active && (!c.expiresAt || new Date(c.expiresAt) >= new Date()))
+       .length,
+     'Una ficha por publicación',
+     'food',
+     '',
+   ],
+ ]
+   .map(
+     ([label, value, note, i, color]) =>
+       `<div class="stat"><div class="stat-label">${label}${icon(i)}</div><div class="stat-num">${value}</div><div class="stat-note ${color}">${note}</div></div>`,
+   )
+   .join('')}</div>
+ <section class="inbox-layout" aria-label="Bandeja de conversaciones"><div class="list-side"><div class="list-title"><h2>Conversaciones</h2><span>${ws.events.length} hilos de prueba</span></div><div class="search-wrap">${icon('search')}<input id="search" type="search" placeholder="Buscar persona, mensaje o publicación…" aria-label="Buscar conversaciones" value="${esc(query)}"></div><div class="filters">${[
+   ['all', 'Todas'],
+   ['dm', 'Con DM'],
+   ['pending', 'Tu equipo'],
+   ['closed', 'Resueltas'],
+ ]
+   .map(
+     ([id, label]) =>
+       `<button class="chip ${filter === id ? 'active' : ''}" data-filter="${id}">${label}</button>`,
+   )
+   .join(
+     '',
+   )}<select id="channel-filter" aria-label="Filtrar canal"><option value="all">Todos los canales</option>${CHANNELS.map((c) => `<option ${channelFilter === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div><div class="comment-list" id="comment-list">${listEvents()}</div></div><div id="detail">${renderDetail()}</div></section>`
+  );
+}
+function filtered() {
+  return workspace().events.filter(
+    (e) =>
+      (filter === 'all' ||
+        (filter === 'dm' && e.messages.some((m) => m.type === 'dm')) ||
+        (filter === 'pending' && e.status === 'pending' && e.conversation !== 'closed') ||
+        (filter === 'closed' && e.conversation === 'closed')) &&
+      (channelFilter === 'all' || e.channel === channelFilter) &&
+      normalize(
+        `${e.name} ${e.text} ${e.postTitle} ${e.messages.map((m) => m.text).join(' ')}`,
+      ).includes(normalize(query)),
+  );
+}
+function listEvents() {
+  const entries = filtered();
+  return entries.length
+    ? entries
+        .map(
+          (e) =>
+            `<button class="comment-item ${selected === e.id ? 'selected' : ''}" data-event="${esc(e.id)}"><span class="avatar">${esc(e.initials || e.name.slice(0, 2).toUpperCase())}</span><div class="comment-body"><div class="comment-top"><span class="comment-name">${esc(e.name)}</span><span class="comment-time">${time(e.messages.at(-1)?.at || e.at)}</span></div><p class="comment-text">${esc(e.messages.at(-1)?.text || e.text)}</p><div class="list-post">${esc(e.postTitle || 'Mensaje directo · Sin publicación asociada')}</div><div class="comment-bottom">${platform(e.channel)}${status(e)}</div></div></button>`,
+        )
+        .join('')
+    : '<div class="empty">No hay conversaciones con este filtro.<br>Prueba una interacción o elige otro canal.</div>';
+}
+function renderDetail() {
+  const e = eventById();
+  if (!e)
+    return '<div class="empty">Selecciona una conversación para ver sus comentarios y mensajes privados.</div>';
+  const privateMessages = e.messages.filter((m) => m.type === 'dm'),
+    publicMessages = e.messages.filter((m) => m.type === 'public');
+  const tab = e.source === 'dm' ? 'dm' : threadTab;
+  const canReplyDM = continuationAllowed(e);
+  const mode = tab === 'public' && e.source === 'comment' ? 'public' : 'dm';
+  const lastCustomer = privateMessages.filter((m) => m.sender === 'contact').at(-1);
+  const currentCampaign = workspace().campaigns.find(
+    (c) =>
+      c.id === e.campaignId &&
+      c.postId === e.postId &&
+      c.channel === e.channel &&
+      c.active &&
+      (!c.expiresAt || new Date(c.expiresAt) >= new Date()),
+  );
+  const suggestion =
+    lastCustomer && currentCampaign ? suggestDM(lastCustomer.text, currentCampaign) : '';
+  return `<div class="detail-header"><span>${platform(e.channel)}</span><button class="text-btn" data-action="resolve">${e.conversation === 'closed' ? 'Reabrir conversación' : '✓ Resolver'}</button></div>
+ <div class="detail-content"><div class="post-mini"><span class="post-art ${e.channel.toLowerCase()} ${e.snapshot?.vertical === 'realestate' ? 'property' : ''}" aria-hidden="true"></span><div><p>${esc(e.postTitle || 'Mensaje privado entrante')}</p><small>${esc(workspace().label)}${e.snapshot ? ` · ${esc(priceLabel(e.snapshot))}${e.snapshot.operation === 'Alquiler' ? ' / mes' : ''}` : ''}</small></div>${e.campaignId ? `<button class="icon-button" data-edit-campaign="${esc(e.campaignId)}" aria-label="Editar publicación">${icon('layers')}</button>` : ''}</div>
+ <div class="lead-summary"><span class="lead-stage ${esc(e.leadStage || 'new')}">${esc(LEAD_STAGES[e.leadStage || 'new'])}</span><button class="text-btn" data-lead="${esc(e.id)}">Actualizar seguimiento ↗</button></div>
+ <div class="thread-tabs">${e.source === 'comment' ? `<button class="${tab === 'public' ? 'active' : ''}" data-thread="public">Comentario público <span>${publicMessages.length}</span></button>` : ''}<button class="${tab === 'dm' ? 'active' : ''}" data-thread="dm">Mensajes privados <span>${privateMessages.length}</span></button></div>
+ <div class="flow-state ${e.conversation === 'blocked' ? 'warning' : ''}"><span class="green-dot"></span>${flowLabels[e.conversation] || 'Pendiente'}<small>${esc(e.reason)}</small></div>
+ <div class="thread-messages">${tab === 'public' ? `<div class="thread-row"><span class="avatar">${esc(e.initials || 'C')}</span><div><p class="thread-label">${esc(e.name)}<span>Comentario · ${time(e.at)}</span></p><p class="thread-bubble">${esc(e.text)}</p></div></div>${publicMessages.map((m) => renderMessage(m, e)).join('')}` : privateMessages.map((m) => renderMessage(m, e)).join('') || `<div class="empty dm-empty">${icon('message')}<p>${e.conversation === 'blocked' ? 'El mensaje privado no se envió. La respuesta pública invita a la persona a escribir primero.' : 'Aquí aparecerá la conversación privada cuando se envíe un DM o la persona escriba.'}</p></div>`}</div>
+ ${e.source === 'comment' || privateMessages.length ? `<button class="btn customer-reply" data-action="customer-message">${icon('plus')}Simular mensaje del cliente</button>` : ''}
+ ${suggestion && e.status === 'pending' && mode === 'dm' ? `<div class="suggested"><small>Sugerencia basada en esta publicación</small><p>${esc(suggestion)}</p><button class="text-btn" data-action="use-suggestion">Usar respuesta ↗</button></div>` : ''}
+ <form class="composer" id="reply-form"><input type="hidden" name="type" value="${mode}"><label for="reply">${mode === 'public' ? 'Respuesta pública de prueba' : 'Responder por mensaje privado'}</label><textarea id="reply" name="reply" maxlength="1000" required ${mode === 'dm' && !canReplyDM ? 'disabled' : ''} placeholder="${mode === 'dm' && !canReplyDM ? 'Espera un mensaje del cliente para continuar por DM.' : 'Escribe tu respuesta…'}"></textarea><div class="composer-bottom"><span>${mode === 'public' ? 'Comentario público' : canReplyDM ? 'El cliente ya inició o respondió el DM' : 'Esperando respuesta del cliente'}</span><button class="btn primary" type="submit" ${mode === 'dm' && !canReplyDM ? 'disabled' : ''}>Guardar respuesta ${icon('arrow')}</button></div></form>
+ <details class="activity"><summary>Actividad de la conversación</summary>${e.timeline.map((t) => `<p><small>${time(t.at)}</small> ${esc(t.text)}</p>`).join('')}</details><p class="demo-note">Prototipo · Los mensajes no se envían a las redes sociales.</p></div>`;
+}
+function renderMessage(m, e) {
+  return `<div class="${m.sender === 'business' ? 'reply-row' : 'thread-row incoming-dm'}">${m.sender === 'contact' ? `<span class="avatar">${esc(e.initials || 'C')}</span>` : ''}<div><p class="thread-label">${esc(m.sender === 'business' ? workspace().label : e.name)}<span>${m.origin === 'automation' ? 'Automatización' : m.sender === 'business' ? 'Tu equipo' : 'Cliente'} · ${time(m.at)}</span></p><p class="thread-bubble">${esc(m.text)}</p>${m.type === 'dm' && m.sender === 'business' ? '<div class="delivery-check">✓ Guardado en la simulación</div>' : ''}</div></div>`;
+}
+function renderCampaigns() {
+  return (
+    heading(
+      workspace().kind === 'realestate'
+        ? 'Cada inmueble tiene su conversación.'
+        : 'Cada post tiene su respuesta.',
+      workspace().kind === 'realestate'
+        ? 'Ficha, operación, zona y precio específicos para cada publicación.'
+        : 'Precio, detalles y mensajes específicos para cada publicación.',
+      `<button class="btn" data-action="simulate">${icon('play')}Probar flujo</button><button class="btn primary" data-action="new-campaign">${icon('plus')}Nueva campaña</button>`,
+    ) +
+    `<div class="info-banner">${icon('info')}<div>La campaña se elige por la publicación comentada. Sus datos se conservan en la conversación para evitar mezclar promociones. ${workspace().campaigns.length ? '' : 'Crea una campaña para empezar.'}</div></div>
+ <div class="campaigns-grid">${
+   workspace()
+     .campaigns.map((c) => {
+       const expired = c.expiresAt && new Date(c.expiresAt) < new Date(),
+         count = workspace().events.filter((e) => e.campaignId === c.id).length;
+       let privatePreview;
+       try {
+         privatePreview = renderTemplate(c.privateTemplate, c, 'María', workspace().label);
+       } catch (error) {
+         privatePreview = error.message;
+       }
+       return `<article class="campaign-card"><div class="campaign-cover ${c.channel.toLowerCase()} ${c.vertical === 'realestate' ? 'property-cover' : ''}"><span class="cover-eyebrow">${c.vertical === 'realestate' ? esc(c.operation) + ' · INMUEBLE DE EJEMPLO' : 'PUBLICACIÓN DE EJEMPLO'}</span><span class="cover-title">${esc(c.product)}</span><span class="cover-price">${esc(priceLabel(c))}<small>${c.operation === 'Alquiler' ? '/ mes' : c.channel}</small></span><span class="${c.vertical === 'realestate' ? 'cover-building' : 'cover-plate'}" aria-hidden="true">${c.vertical === 'realestate' ? '⌂' : '✦'}</span></div><div class="campaign-inner"><div class="card-top">${platform(c.channel)}<button class="toggle ${c.active ? 'on' : ''}" data-toggle-campaign="${esc(c.id)}" role="switch" aria-checked="${c.active}" aria-label="${c.active ? 'Pausar' : 'Activar'} ${esc(c.title)}"></button></div><h3>${esc(c.title)}</h3>${c.vertical === 'realestate' ? `<p class="property-location">${esc(c.location)}</p><div class="property-specs"><span>${esc(c.area)} m²</span><span>${esc(c.bedrooms)} dormitorios</span><span>${esc(c.bathrooms)} baños</span></div>` : ''}<p class="campaign-description">${esc(c.description)}</p><div class="campaign-hours">${icon('clock')}${esc(c.hours)}</div><div class="tags">${c.anyComment ? '<span>Cualquier comentario</span>' : c.keywords.map((k) => `<span>${esc(k)}</span>`).join('')}</div><div class="rule-preview"><small>${c.action === 'both' ? 'Mensaje privado' : 'Respuesta pública'}</small>${esc(c.action === 'both' ? privatePreview : c.publicTemplate)}</div><div class="campaign-foot"><span>${c.availability && c.availability !== 'available' ? 'Requiere asesor · ' + { reserved: 'Reservado', closed: 'Cerrado' }[c.availability] : expired ? 'Vigencia terminada' : c.active ? 'Activa · ' + count + ' interacciones' : 'Pausada'}${c.channel === 'TikTok' && c.action === 'both' ? ' · DM por validar' : ''}</span></div><div class="card-actions"><button class="btn primary" data-test-campaign="${esc(c.id)}">${icon('play')}Probar</button><button class="btn" data-edit-campaign="${esc(c.id)}">Editar</button><button class="icon-button" data-delete-campaign="${esc(c.id)}" aria-label="Eliminar campaña">✕</button></div></div></article>`;
+     })
+     .join('') ||
+   '<div class="panel empty rules-empty">Todavía no hay publicaciones configuradas.<br>Crea una campaña y completa sus detalles.</div>'
+ }</div>`
+  );
+}
+function renderLeads() {
+  const leads = workspace().events.filter((e) => e.status !== 'ignored');
+  const counts = {
+    new: 0,
+    contacted: 0,
+    qualified: 0,
+    visit_requested: 0,
+    visit_confirmed: 0,
+    won: 0,
+    lost: 0,
+  };
+  leads.forEach((e) => counts[e.leadStage || 'new']++);
+  return (
+    heading(
+      'Del interés al seguimiento.',
+      'Cada prospecto conserva el inmueble o publicación que le interesa.',
+      `<button class="btn" data-action="measurement">${icon('layers')}Medición con Meta</button><button class="btn primary" data-action="simulate">${icon('plus')}Nuevo prospecto de prueba</button>`,
+    ) +
+    `<div class="stats">${[
+      ['Nuevos', counts.new, 'Por contactar'],
+      ['Calificados', counts.qualified, 'Revisados por tu equipo'],
+      ['Visitas solicitadas', counts.visit_requested, 'Pendientes de confirmar'],
+      ['Cierres registrados', counts.won, 'Resultados marcados por tu equipo'],
+    ]
+      .map(
+        ([label, count, note]) =>
+          `<div class="stat"><div class="stat-label">${label}${icon('message')}</div><div class="stat-num">${count}</div><div class="stat-note">${note}</div></div>`,
+      )
+      .join('')}</div>
  <div class="info-banner">${icon('info')}<div>Una solicitud de visita queda pendiente hasta que un asesor la confirme. Los resultados de este prototipo se guardan localmente; no se envían al Pixel ni a Meta.</div></div>
- <div class="leads-grid">${leads.map(e=>`<article class="lead-card"><div class="card-top"><span class="avatar">${esc(e.initials||'C')}</span><span class="lead-stage ${esc(e.leadStage||'new')}">${esc(LEAD_STAGES[e.leadStage||'new'])}</span></div><h3>${esc(e.name)}</h3><p>${esc(e.postTitle||'Mensaje directo sin publicación asociada')}</p>${e.snapshot?.vertical==='realestate'?`<div class="lead-property"><span>${esc(e.snapshot.operation)} · ${esc(priceLabel(e.snapshot))}</span><small>${esc(e.snapshot.location)}</small></div>`:''}<div class="comment-bottom">${platform(e.channel)}<span class="muted">${time(e.messages.at(-1)?.at||e.at)}</span></div>${e.contactInfo?`<p class="lead-contact">${esc(e.contactInfo)}</p>`:''}${e.notes?`<p class="lead-notes">${esc(e.notes)}</p>`:''}<div class="card-actions"><button class="btn primary" data-lead="${esc(e.id)}">Seguimiento</button><button class="btn" data-open-thread="${esc(e.id)}">Conversación ↗</button></div></article>`).join('')||'<div class="panel empty rules-empty">Los prospectos aparecerán cuando recibas una interacción de prueba.</div>'}</div>`;
+ <div class="leads-grid">${leads.map((e) => `<article class="lead-card"><div class="card-top"><span class="avatar">${esc(e.initials || 'C')}</span><span class="lead-stage ${esc(e.leadStage || 'new')}">${esc(LEAD_STAGES[e.leadStage || 'new'])}</span></div><h3>${esc(e.name)}</h3><p>${esc(e.postTitle || 'Mensaje directo sin publicación asociada')}</p>${e.snapshot?.vertical === 'realestate' ? `<div class="lead-property"><span>${esc(e.snapshot.operation)} · ${esc(priceLabel(e.snapshot))}</span><small>${esc(e.snapshot.location)}</small></div>` : ''}<div class="comment-bottom">${platform(e.channel)}<span class="muted">${time(e.messages.at(-1)?.at || e.at)}</span></div>${e.contactInfo ? `<p class="lead-contact">${esc(e.contactInfo)}</p>` : ''}${e.notes ? `<p class="lead-notes">${esc(e.notes)}</p>` : ''}<div class="card-actions"><button class="btn primary" data-lead="${esc(e.id)}">Seguimiento</button><button class="btn" data-open-thread="${esc(e.id)}">Conversación ↗</button></div></article>`).join('') || '<div class="panel empty rules-empty">Los prospectos aparecerán cuando recibas una interacción de prueba.</div>'}</div>`
+  );
 }
-function editLead(id){const e=eventById(id);if(!e)return;openDialog(`Seguimiento de ${e.name}`,`<p class="dialog-copy">${esc(e.postTitle||'Mensaje privado')} · ${esc(e.channel)}</p><label class="field">Etapa<select name="stage">${Object.entries(LEAD_STAGES).map(([key,label])=>`<option value="${key}" ${(e.leadStage||'new')===key?'selected':''}>${label}</option>`).join('')}</select></label>${field('Contacto que la persona haya compartido, opcional','contactInfo',e.contactInfo||'',{max:150})}${field('Notas del asesor','notes',e.notes||'',{textarea:true,max:500})}<label class="check-field"><input type="checkbox" name="confirmed"> Confirmo que la visita o el cierre ocurrió; no es solo una solicitud.</label><p class="fine-print">La confirmación se requiere para marcar una visita confirmada o un cierre. Es un registro local de prueba, no una reserva, venta ni evento enviado a Meta.</p>`,'Guardar seguimiento',fd=>{try{const updated=updateLeadStage(workspace(),e,String(fd.get('stage')),{confirmed:fd.has('confirmed')});updated.contactInfo=String(fd.get('contactInfo')||'').trim();updated.notes=String(fd.get('notes')||'').trim();workspace().events[workspace().events.indexOf(e)]=updated;save();render();toast('Seguimiento guardado en el prototipo.');}catch(error){toast(error.message);return false;}});}
-function measurement(){const config=workspace().measurement||{};openDialog('Preparar medición de resultados',`<p class="dialog-copy">Cada inmobiliaria podrá utilizar su propio Pixel para la actividad de su web. Las conversiones originadas en mensajes requieren una integración de servidor compatible. Aquí solo guardamos la configuración prevista.</p>${field('ID del Pixel o conjunto de datos, opcional','pixelId',config.pixelId||'',{max:30})}${field('Web pública del negocio, opcional','website',config.website||'',{type:'url',max:300})}<div class="info-banner">${icon('info')}<span>Sin conexión activa: no se carga el Pixel ni se envían eventos. No pegues tokens ni claves en estos campos.</span></div>`,'Guardar preparación',fd=>{const pixelId=String(fd.get('pixelId')||'').trim(),website=String(fd.get('website')||'').trim();if(pixelId&&!/^\d{5,30}$/.test(pixelId)){toast('El ID debe contener solo números.');return false;}if(website){try{if(new URL(website).protocol!=='https:')throw new Error();}catch{toast('La web debe ser una URL HTTPS válida.');return false;}}workspace().measurement={pixelId,website,enabled:false};save();toast('Configuración guardada. La medición real sigue desactivada.');});}
-function renderChannels(){return heading('Tres canales. Una sola bandeja.','Conecta cada cuenta cuando dispongas de los permisos necesarios.')+
- `<div class="info-banner">${icon('info')}<div><strong>Estado de preparación de Lukmi SRL.</strong><br>Meta: recuperación de acceso de administrador en curso. TikTok: solicitud de Accounts API en preparación; el acceso a mensajes se solicita por separado. Esta demo no comprueba el estado de tus cuentas.</div></div>
- <div class="channels-grid">${CHANNELS.map(c=>`<article class="channel-card"><div class="card-top">${platform(c)}<span class="channel-state">Sin conectar</span></div><h3>${c}</h3><p>${c==='TikTok'?'Comentarios y mensajes privados requieren sus respectivos permisos. El DM iniciado desde un comentario debe validarse para tu cuenta.':'Comentarios, respuesta pública y mensaje privado asociado al post, con autorización y revisión de permisos.'}</p><ul class="channel-capabilities"><li>✓ Flujo disponible en el simulador</li><li>${c==='TikTok'?'◷ Comment-to-Message por confirmar':'◷ Autorización de la cuenta pendiente'}</li><li>◷ Envío real pendiente de conexión</li></ul><button class="btn" data-connect="${c}">Ver requisitos ${icon('arrow')}</button></article>`).join('')}</div><section class="panel"><h2>Lo que registra cada publicación</h2><div class="feature-strip"><span>${icon('layers')}Ficha de publicación</span><span>${icon('layers')}Precio y moneda</span><span>${icon('clock')}Horario y vigencia</span><span>${icon('message')}Respuesta pública y DM</span></div><p class="fine-print">Cada empresa conectará sus propias cuentas mediante autorización oficial. Las contraseñas no se solicitan en la plataforma.</p></section>`;}
-function renderPlans(){const ws=workspace(),used=usage(ws),limit=PLANS[ws.plan].limit;return heading('Planes para el mercado boliviano.','Precios propuestos para validar con clientes · Sin cobros activos',`<button class="btn" data-action="export">${icon('download')}Guardar copia</button><button class="btn" data-action="import">Importar copia</button>`)+
- `<div class="plans-grid">${Object.entries(PLANS).map(([id,p])=>`<article class="plan-card ${id===ws.plan?'featured':''}"><div class="row-end"><h3>${p.name}</h3>${id===ws.plan?'<span class="plan-label">PLAN DE DEMO</span>':''}</div><p>${id==='piloto'?'Para tus primeros clientes.':id==='negocio'?'Para el seguimiento diario de tu negocio.':'Para gestionar varios negocios.'}</p><div class="price"><small class="currency">Bs</small>${p.price}<small> / mes</small></div><ul><li>${p.accounts} cuentas entre los tres canales</li><li>${p.users} usuarios propuestos</li><li>${p.limit.toLocaleString('es-BO')} acciones automáticas / mes</li><li>Campañas con contenido por publicación</li><li>Comentarios y bandeja de mensajes</li></ul><button class="btn ${id===ws.plan?'primary':''}" data-plan="${id}">${id===ws.plan?'Plan seleccionado':'Probar este plan'}</button></article>`).join('')}</div>
- <section class="panel"><div class="panel-heading"><h2>Uso del espacio de prueba</h2><span class="muted">${esc(ws.label)}</span></div><div class="usage-row"><span>Acciones automáticas</span><div class="track"><span style="width:${Math.min(100,used/limit*100)}%"></span></div><small>${used} / ${limit}</small></div><p class="fine-print">Un DM y su confirmación pública cuentan como dos acciones. Las respuestas automáticas posteriores también cuentan. Las respuestas manuales no consumen este límite. El simulador detiene las automatizaciones al alcanzar la cuota; los pagos, usuarios y cuotas reales se implementarán en el servidor.</p></section>
- <div class="info-banner">${icon('info')}<div>Estos planes son una propuesta comercial. Seleccionar uno cambia solo esta demo; no inicia una suscripción, un cobro ni una conexión.</div></div><input id="backup-input" type="file" accept="application/json,.json" hidden>`;}
-function openDialog(title,body,button='',submit=null,wide=false){dialog.classList.toggle('wide',wide);draftCampaign=null;document.getElementById('dialog-title').textContent=title;document.getElementById('dialog-body').innerHTML=body;document.getElementById('dialog-actions').innerHTML=`<button type="button" class="btn" data-action="close">${submit?'Cancelar':'Entendido'}</button>${submit?`<button class="btn primary" type="submit">${button||'Guardar'}</button>`:''}`;dialogSubmit=submit;dialog.showModal();}
-function openSimulator(campaignId){
- const selectedCampaign=workspace().campaigns.find(c=>c.id===campaignId)||workspace().campaigns[0];
- openDialog('Prueba el recorrido de tu cliente',`<p class="dialog-copy">Selecciona el post y simula una pregunta. Puedes comprobar tanto el envío como su rechazo.</p><label class="field">Tipo de interacción<select name="source" id="simulate-source"><option value="comment">Comentario en una publicación</option><option value="dm">Mensaje privado entrante</option></select></label><label class="field">Publicación<select name="campaignId" id="simulate-campaign">${workspace().campaigns.map(c=>`<option value="${esc(c.id)}" ${c.id===selectedCampaign?.id?'selected':''}>${esc(c.channel+' · '+c.title+' · '+priceLabel(c))}</option>`).join('')}<option value="_none">Sin publicación asociada</option></select></label><div id="sim-no-post" hidden><label class="field">Canal<select name="channel">${CHANNELS.map(c=>`<option>${c}</option>`).join('')}</select></label></div><label class="field">Nombre de la persona<input name="name" required maxlength="70" value="Cliente de prueba"></label><label class="field">Pregunta<textarea name="text" required maxlength="1000">¿Cuánto cuesta?</textarea></label><div id="delivery-options"><label class="field">Resultado del envío privado<select name="delivery"><option value="success">Simular entrega correcta</option><option value="rejected">Simular que el canal rechaza el DM</option></select></label><label class="check-field" id="tiktok-option"><input type="checkbox" name="tiktokEnabled"> Simular Comment-to-Message habilitado en TikTok</label><p class="fine-print" id="tiktok-note">Esta casilla solo prueba el prototipo. No habilita mensajes en tu cuenta real.</p></div><div class="info-banner">${icon('info')}<span>Datos de prueba. No se conecta ninguna cuenta ni se envían mensajes reales.</span></div>`,'Simular interacción',fd=>{
-   const name=String(fd.get('name')).trim(),text=String(fd.get('text')).trim(),campaign=workspace().campaigns.find(c=>c.id===fd.get('campaignId'));
-   if(!name||!text){toast('Escribe el nombre y la pregunta.');return false;}
-   const input={workspaceId:workspace().id,id:makeId(),externalId:makeId(),name,initials:name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase(),text,channel:campaign?.channel||fd.get('channel')||'Instagram',postId:campaign?.postId||'unconfigured-demo-post',campaignId:campaign?.id};
-   const result=fd.get('source')==='comment'?processCampaignComment(workspace(),input,{delivery:fd.get('delivery'),tiktokCommentToMessage:fd.has('tiktokEnabled')}):{event:receiveDirectMessage(workspace(),input)};
-   workspace().events.unshift(result.event);selected=result.event.id;filter='all';query='';channelFilter='all';threadTab=result.event.messages.some(m=>m.type==='dm')?'dm':'public';save();navigate('inbox');toast(result.event.conversation==='blocked'?'DM sin enviar: se usa la invitación pública.':result.event.status==='automatic'?'Respuesta creada con la información de esta publicación.':'La consulta quedó pendiente para tu equipo.');
- });syncSimulator();
+function editLead(id) {
+  const e = eventById(id);
+  if (!e) return;
+  openDialog(
+    `Seguimiento de ${e.name}`,
+    `<p class="dialog-copy">${esc(e.postTitle || 'Mensaje privado')} · ${esc(e.channel)}</p><label class="field">Etapa<select name="stage">${Object.entries(
+      LEAD_STAGES,
+    )
+      .map(
+        ([key, label]) =>
+          `<option value="${key}" ${(e.leadStage || 'new') === key ? 'selected' : ''}>${label}</option>`,
+      )
+      .join(
+        '',
+      )}</select></label>${field('Contacto que la persona haya compartido, opcional', 'contactInfo', e.contactInfo || '', { max: 150 })}${field('Notas del asesor', 'notes', e.notes || '', { textarea: true, max: 500 })}<label class="check-field"><input type="checkbox" name="confirmed"> Confirmo que la visita o el cierre ocurrió; no es solo una solicitud.</label><p class="fine-print">La confirmación se requiere para marcar una visita confirmada o un cierre. Es un registro local de prueba, no una reserva, venta ni evento enviado a Meta.</p>`,
+    'Guardar seguimiento',
+    (fd) => {
+      try {
+        const updated = updateLeadStage(workspace(), e, String(fd.get('stage')), {
+          confirmed: fd.has('confirmed'),
+        });
+        updated.contactInfo = String(fd.get('contactInfo') || '').trim();
+        updated.notes = String(fd.get('notes') || '').trim();
+        workspace().events[workspace().events.indexOf(e)] = updated;
+        save();
+        render();
+        toast('Seguimiento guardado en el prototipo.');
+      } catch (error) {
+        toast(error.message);
+        return false;
+      }
+    },
+  );
 }
-function syncSimulator(){if(!document.getElementById('simulate-source'))return;const source=form.elements.source.value,campaign=workspace().campaigns.find(c=>c.id===form.elements.campaignId.value);document.getElementById('delivery-options').hidden=source==='dm';document.getElementById('sim-no-post').hidden=Boolean(campaign);document.getElementById('tiktok-option').hidden=campaign?.channel!=='TikTok';document.getElementById('tiktok-note').hidden=campaign?.channel!=='TikTok';}
-function getDraft(){const fd=new FormData(form),date=String(fd.get('expiresAt')||'');return {...draftCampaign,title:String(fd.get('title')||'').trim(),postId:String(fd.get('postId')||'').trim(),channel:String(fd.get('channel')||'Instagram'),product:String(fd.get('product')||'').trim(),price:String(fd.get('price')||'').trim(),currency:String(fd.get('currency')||draftCampaign.currency||'Bs'),operation:String(fd.get('operation')||draftCampaign.operation||''),propertyType:String(fd.get('propertyType')||draftCampaign.propertyType||''),location:String(fd.get('location')||draftCampaign.location||'').trim(),area:String(fd.get('area')||draftCampaign.area||''),bedrooms:String(fd.get('bedrooms')??draftCampaign.bedrooms??''),bathrooms:String(fd.get('bathrooms')??draftCampaign.bathrooms??''),availability:String(fd.get('availability')||draftCampaign.availability||'available'),description:String(fd.get('description')||'').trim(),hours:String(fd.get('hours')||'').trim(),bookingUrl:String(fd.get('bookingUrl')||'').trim(),keywords:String(fd.get('keywords')||'').split(',').map(k=>k.trim()).filter(Boolean),privateTemplate:String(fd.get('privateTemplate')||'').trim(),publicTemplate:String(fd.get('publicTemplate')||'').trim(),fallbackTemplate:String(fd.get('fallbackTemplate')||'').trim(),action:String(fd.get('action')||'both'),autoFollowup:fd.has('autoFollowup'),anyComment:fd.has('anyComment'),expiresAt:date?new Date(date+'T23:59:59').toISOString():''};}
-function field(label,name,value,options={}){return `<label class="field">${label}${options.textarea?`<textarea name="${name}" ${options.required?'required':''} maxlength="${options.max||1000}">${esc(value)}</textarea>`:`<input name="${name}" type="${options.type||'text'}" ${options.required?'required':''} ${options.type==='number'?'min="0" step="0.01"':''} maxlength="${options.max||150}" value="${esc(value)}">`}${options.note?`<small>${options.note}</small>`:''}</label>`;}
-function propertyFields(c){if(c.vertical!=='realestate')return '';return `<div class="field-pair"><label class="field">Operación<select name="operation">${['Venta','Alquiler','Anticrético'].map(v=>`<option ${c.operation===v?'selected':''}>${v}</option>`).join('')}</select></label><label class="field">Tipo de inmueble<select name="propertyType">${['Departamento','Casa','Terreno','Oficina','Local comercial','Otro'].map(v=>`<option ${c.propertyType===v?'selected':''}>${v}</option>`).join('')}</select></label></div>${field('Zona y ciudad','location',c.location||'',{required:true,max:200})}<div class="field-pair">${field('Superficie en m²','area',c.area||'',{required:true,type:'number'})}${field('Dormitorios','bedrooms',c.bedrooms??'',{required:true,type:'number',note:'Usa 0 si no aplica.'})}</div><div class="field-pair">${field('Baños','bathrooms',c.bathrooms??'',{required:true,type:'number',note:'Usa 0 si no aplica.'})}<label class="field">Disponibilidad<select name="availability"><option value="available" ${c.availability==='available'?'selected':''}>Disponible</option><option value="reserved" ${c.availability==='reserved'?'selected':''}>Reservado · revisar con asesor</option><option value="closed" ${c.availability==='closed'?'selected':''}>Cerrado · revisar con asesor</option></select></label></div>`;}
-function openCampaign(id){
- const existing=workspace().campaigns.find(c=>c.id===id),c=existing?{...existing,keywords:[...existing.keywords]}:newCampaign('Instagram',workspace().kind||'general');
- openDialog(existing?'Editar campaña por publicación':'Nueva campaña por publicación',`<div class="editor-layout"><div class="editor-fields"><div class="field-pair">${field('Nombre de la campaña','title',c.title,{required:true})}<label class="field">Canal<select name="channel">${CHANNELS.map(ch=>`<option ${c.channel===ch?'selected':''}>${ch}</option>`).join('')}</select></label></div>${field('ID o enlace de la publicación','postId',c.postId,{required:true,max:400,note:'En esta demo identifica el post que probarás. En producción se elegirá de tus publicaciones autorizadas.'})}<h3>Información de esta publicación</h3><div class="field-pair">${field(c.vertical==='realestate'?'Nombre del inmueble':'Oferta o producto','product',c.product,{required:true})}${field('Precio','price',c.price,{required:true,type:'number'})}</div><label class="field">Moneda<select name="currency"><option value="Bs" ${c.currency==='Bs'?'selected':''}>Bolivianos (Bs)</option><option value="USD" ${c.currency==='USD'?'selected':''}>Dólares (USD)</option></select></label>${propertyFields(c)}${field(c.vertical==='realestate'?'Características del inmueble':'Detalles de la oferta','description',c.description,{required:true,textarea:true,max:700})}${field('Horario','hours',c.hours,{required:true,max:180})}<div class="field-pair">${field(c.vertical==='realestate'?'Enlace para solicitar visita, opcional':'Enlace de reservas, opcional','bookingUrl',c.bookingUrl,{type:'url',max:300})}${field('Vigente hasta, opcional','expiresAt',c.expiresAt?new Date(c.expiresAt).toLocaleDateString('sv-SE'):'',{type:'date'})}</div><h3>Cuándo responder</h3>${field('Palabras o frases, separadas por comas','keywords',c.keywords.join(', '),{max:300})}<label class="check-field"><input type="checkbox" name="anyComment" ${c.anyComment?'checked':''}> Activar con cualquier comentario</label><label class="field">Acción<select name="action"><option value="both" ${c.action==='both'?'selected':''}>Enviar DM y confirmar en público</option><option value="public" ${c.action==='public'?'selected':''}>Solo responder públicamente</option></select></label><h3>Mensajes de la campaña</h3><p class="variable-help">Variables: {nombre}, {negocio}, {producto}, {precio}, {moneda}, {detalle}, {horario}, {reserva}${c.vertical==='realestate'?', {operacion}, {zona}, {superficie}, {dormitorios}, {banos}, {tipo}':''}</p>${field('Mensaje privado','privateTemplate',c.privateTemplate,{textarea:true,max:1000})}${field('Respuesta pública','publicTemplate',c.publicTemplate,{required:true,textarea:true,max:600})}${field('Si no se puede enviar el DM','fallbackTemplate',c.fallbackTemplate,{textarea:true,max:600})}<label class="check-field"><input type="checkbox" name="autoFollowup" ${c.autoFollowup?'checked':''}> Responder preguntas habituales dentro del DM con los datos de esta publicación</label><p class="fine-print">${c.vertical==='realestate'?'El seguimiento cubre precio, zona, características y solicitud de visita. Documentación, crédito y consultas sin información configurada pasan a un asesor. No confirma visitas ni disponibilidad.':'El seguimiento cubre precio, detalles, horario y solicitud de reserva. Otras preguntas pasan a tu equipo. No confirma reservas ni disponibilidad.'}</p><div id="campaign-errors" class="form-errors" role="alert"></div></div><aside class="editor-preview"><span class="eyebrow">VISTA PREVIA · DATOS DE PRUEBA</span><div id="campaign-preview"></div></aside></div>`,'Guardar campaña',()=>{
-   const updated=getDraft(),errors=validateCampaign(updated,workspace().campaigns);
-   if(errors.length){document.getElementById('campaign-errors').textContent=errors.join(' ');document.getElementById('campaign-errors').scrollIntoView({block:'nearest'});return false;}
-   if(existing)workspace().campaigns[workspace().campaigns.indexOf(existing)]=updated;else workspace().campaigns.push(updated);save();render();toast('Campaña guardada. Las conversaciones anteriores conservan su información original.');
- },true);draftCampaign=c;updateCampaignPreview();
+function measurement() {
+  const config = workspace().measurement || {};
+  openDialog(
+    'Preparar medición de resultados',
+    `<p class="dialog-copy">Cada inmobiliaria podrá utilizar su propio Pixel para la actividad de su web. Las conversiones originadas en mensajes requieren una integración de servidor compatible. Aquí solo guardamos la configuración prevista.</p>${field('ID del Pixel o conjunto de datos, opcional', 'pixelId', config.pixelId || '', { max: 30 })}${field('Web pública del negocio, opcional', 'website', config.website || '', { type: 'url', max: 300 })}<div class="info-banner">${icon('info')}<span>Sin conexión activa: no se carga el Pixel ni se envían eventos. No pegues tokens ni claves en estos campos.</span></div>`,
+    'Guardar preparación',
+    (fd) => {
+      const pixelId = String(fd.get('pixelId') || '').trim(),
+        website = String(fd.get('website') || '').trim();
+      if (pixelId && !/^\d{5,30}$/.test(pixelId)) {
+        toast('El ID debe contener solo números.');
+        return false;
+      }
+      if (website) {
+        try {
+          if (new URL(website).protocol !== 'https:') throw new Error();
+        } catch {
+          toast('La web debe ser una URL HTTPS válida.');
+          return false;
+        }
+      }
+      workspace().measurement = { pixelId, website, enabled: false };
+      save();
+      toast('Configuración guardada. La medición real sigue desactivada.');
+    },
+  );
 }
-function updateCampaignPreview(){if(!draftCampaign)return;let c;try{c=getDraft();}catch{return;}const block=document.getElementById('campaign-preview');let privateText,publicText;try{privateText=renderTemplate(c.privateTemplate,c,'María',workspace().label);publicText=renderTemplate(c.publicTemplate,c,'María',workspace().label);}catch(error){block.innerHTML=`<p class="form-errors">${esc(error.message)}</p>`;return;}block.innerHTML=`<div class="preview-post"><span>${platform(c.channel)}</span><h3>${esc(c.product||(c.vertical==='realestate'?'Tu inmueble':'Tu promoción'))}</h3><strong>${esc(priceLabel(c))}</strong>${c.vertical==='realestate'?`<p>${esc(c.operation)} · ${esc(c.location)}<br>${esc(c.area)} m² · ${esc(c.bedrooms)} dormitorios · ${esc(c.bathrooms)} baños</p>`:''}<p>${esc(c.description||'Añade el menú o los detalles de la oferta.')}</p><small>${esc(c.hours||'Añade el horario')}</small></div><div class="preview-comment"><span class="avatar">ML</span><p>María<br><strong>¿Cuánto cuesta?</strong></p></div>${c.action==='both'?`<small class="preview-label">1. Mensaje privado</small><div class="thread-bubble preview-dm">${esc(privateText)}</div><small class="preview-label">2. Confirmación pública tras la entrega</small>`:'<small class="preview-label">Respuesta pública</small>'}<div class="thread-bubble preview-public">${esc(publicText)}</div>${c.channel==='TikTok'&&c.action==='both'?'<p class="fine-print">La disponibilidad del DM por comentario se validará para tu cuenta de TikTok.</p>':''}`;}
-function customerMessage(){const e=eventById();if(!e)return;openDialog(`Mensaje privado de ${e.name}`,`<p class="dialog-copy">Simula que la persona escribe por DM. La conversación conserva la publicación de origen.</p><label class="field">Mensaje del cliente<textarea name="text" required maxlength="1000">${e.snapshot?.vertical==='realestate'?'Quiero agendar una visita':'Quiero reservar una mesa'}</textarea></label>`,'Recibir mensaje',fd=>{try{const updated=receivePrivateMessage(workspace(),e,String(fd.get('text')));workspace().events[workspace().events.indexOf(e)]=updated;threadTab='dm';save();render();toast(updated.status==='automatic'?'Pregunta habitual respondida en la simulación.':'Nuevo mensaje pendiente para tu equipo.');}catch(error){toast(error.message);return false;}});}
-function connection(channel){const text=channel==='Instagram'?'Podemos preparar la conexión directa mediante Instagram Login para una cuenta profesional. Necesitamos una aplicación de Meta que controles, su configuración y los permisos correspondientes. La conexión piloto de Instagram se configura desde la VM y puede enviar respuestas y DMs mediante reglas por publicación. Consulta los resultados en «Instagram: actividad real». El inicio de sesión de clientes con Instagram sigue pendiente.':channel==='TikTok'?'La solicitud de Accounts API cubre los comentarios. Para mensajes privados se necesita acceso a Business Messaging API, autorización de la cuenta y comprobar si admite Comment-to-Message. El simulador no confirma disponibilidad en Bolivia.':'La conexión piloto de una página de Facebook se configura desde la VM con sus permisos y token de página. Puede recibir comentarios y mensajes y, al activar una regla por publicación, responder públicamente y enviar el privado por Messenger. Consulta «Facebook: actividad real». El acceso del portafolio y el de la página se revisan por separado.';openDialog(`Preparar ${channel}`,`<p class="dialog-copy">${text}</p><div class="info-banner">${icon('info')}<span>Este diálogo es parte del simulador: no modifica permisos ni activa envíos. Las reglas reales de Instagram se administran por separado.</span></div>${channel==='TikTok'?'<p class="dialog-copy"><a class="text-link" href="https://business-api.tiktok.com/portal/docs/business-messaging-api-get-started/v1.3" target="_blank" rel="noopener noreferrer">Ver proceso oficial de Business Messaging ↗</a></p>':''}`);}
-function newWorkspace(){openDialog('Nuevo espacio de prueba',field('Nombre del negocio','name','',{required:true,max:80})+'<label class="field">Sector<select name="kind"><option value="realestate">Inmobiliaria</option><option value="restaurant">Restaurante</option><option value="general">Otro negocio</option></select></label><p class="dialog-copy">Se creará un espacio vacío con sus propias campañas y conversaciones. En modo servidor pertenece a tu usuario; no invita a otras personas ni crea una suscripción.</p>','Crear espacio',fd=>{const label=String(fd.get('name')).trim();if(!label){toast('Escribe un nombre.');return false;}const id=makeId();data.workspaces[id]={id,label,kind:String(fd.get('kind')),plan:'negocio',campaigns:[],events:[]};data.current=id;selected=null;filter='all';query='';save();navigate('campaigns');toast('Espacio de prueba creado. Añade tu primera publicación.');});}
-function guide(){const property=workspace().kind==='realestate';openDialog('Graba el flujo para la revisión',`<ol class="recording-guide"><li>Abre <strong>Campañas por post</strong> y muestra ${property?'«Departamento en Equipetrol»: precio, zona y características':'una oferta con sus detalles'}.</li><li>Pulsa <strong>Probar</strong> y simula «¿Cuánto cuesta?» en Instagram.</li><li>Muestra el <strong>DM con la ficha correcta</strong> y la confirmación en el comentario público.</li><li>Prueba ${property?'la casa en alquiler':'otra campaña'} y muestra que envía <strong>la información de esa otra publicación</strong>.</li><li>Pulsa <strong>Simular mensaje del cliente</strong>, escribe «${property?'Quiero agendar una visita':'Quiero reservar'}» y muestra el seguimiento.</li><li>Abre <strong>Prospectos</strong> y muestra la etapa ${property?'Visita solicitada':'Contactado'}. Las confirmaciones las registra una persona.</li><li>En TikTok, muestra la invitación pública cuando el DM está sin habilitar. Si pruebas el DM hipotético, identifica la casilla de simulación.</li></ol><div class="info-banner">${icon('info')}<span>Presenta el video como prototipo. No hay cuentas conectadas ni mensajes reales. TikTok revisará por separado los permisos y las funciones que solicites.</span></div>`);}
-function exportBackup(){const blob=new Blob([JSON.stringify({...data,exportedAt:new Date().toISOString(),demo:true},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='conversa-campanas-y-conversaciones.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Copia del prototipo descargada.');}
-document.addEventListener('click',event=>{
- const b=event.target.closest('button');if(!b)return;
- if(b.dataset.page){navigate(b.dataset.page);return;}
- if(b.dataset.event){selected=b.dataset.event;const e=eventById();threadTab=e.messages.some(m=>m.type==='dm')?'dm':'public';document.getElementById('comment-list').innerHTML=listEvents();document.getElementById('detail').innerHTML=renderDetail();return;}
- if(b.dataset.thread){threadTab=b.dataset.thread;document.getElementById('detail').innerHTML=renderDetail();return;}
- if(b.dataset.filter){filter=b.dataset.filter;const list=filtered();if(!list.some(e=>e.id===selected))selected=list[0]?.id;render();return;}
- if(b.dataset.editCampaign){openCampaign(b.dataset.editCampaign);return;}
- if(b.dataset.lead){editLead(b.dataset.lead);return;}
- if(b.dataset.openThread){selected=b.dataset.openThread;filter='all';query='';channelFilter='all';threadTab='dm';navigate('inbox');return;}
- if(b.dataset.testCampaign){openSimulator(b.dataset.testCampaign);return;}
- if(b.dataset.toggleCampaign){const c=workspace().campaigns.find(c=>c.id===b.dataset.toggleCampaign);c.active=!c.active;save();render();toast(c.active?'Campaña activada en la demo.':'Campaña pausada.');return;}
- if(b.dataset.deleteCampaign){const id=b.dataset.deleteCampaign;openDialog('Eliminar campaña','<p class="dialog-copy">Se eliminará la configuración de esta publicación. Se conservarán las conversaciones y sus mensajes anteriores.</p>','Eliminar',()=>{workspace().campaigns=workspace().campaigns.filter(c=>c.id!==id);save();render();toast('Campaña eliminada.');});return;}
- if(b.dataset.connect){connection(b.dataset.connect);return;}
- if(b.dataset.plan){const id=b.dataset.plan;openDialog(`Plan ${PLANS[id].name}`,`<p class="dialog-copy">Precio propuesto: Bs${PLANS[id].price} al mes. Seleccionarlo cambia el límite del simulador, sin iniciar pagos ni una suscripción real.</p>`,'Seleccionar en la demo',()=>{workspace().plan=id;save();render();toast('Plan de prueba seleccionado. No se hizo ningún cobro.');});return;}
- const action=b.dataset.action;
- if(action==='close'||b.id==='close-dialog')dialog.close();
- if(action==='simulate'||b.id==='sidebar-simulate')openSimulator();
- if(action==='new-campaign')openCampaign();
- if(action==='customer-message')customerMessage();
- if(b.id==='help'&&LIVE_PAGES[page]){openDialog('Tu centro de operaciones','<p class="dialog-copy">Resumen reúne tus canales y métricas de los últimos 7 días. En Actividad puedes revisar comentarios, mensajes y el resultado de cada envío. Automatizaciones permite editar mensajes y activar o pausar publicaciones. Canales muestra las cuentas y el estado guardado de su autorización.</p>');return;}
- if(action==='guide'||b.id==='help')guide();
- if(action==='export')exportBackup();
- if(action==='import')document.getElementById('backup-input').click();
- if(action==='measurement')measurement();
- if(action==='resolve'){const e=eventById();if(e){e.conversation=e.conversation==='closed'?'awaiting_team':'closed';if(e.conversation!=='closed')e.status='pending';e.reason=e.conversation==='closed'?'Marcada como resuelta por tu equipo.':'Reabierta para tu equipo.';save();render();}}
- if(action==='use-suggestion'){document.getElementById('reply').value=document.querySelector('.suggested p')?.textContent||'';}
- if(b.id==='profile')openDialog('Conversa · Lukmi SRL',`<p class="dialog-copy">${account.mode==='server'?'Acceso autenticado. Las campañas y prospectos se guardan en el servidor, separados por usuario. Los ejemplos siguen siendo ficticios.':'Demo autónoma con guardado en este navegador.'}<br><br>Las conexiones reales de Instagram y Facebook se consultan y gestionan desde el centro de operaciones. Esta sección de demo conserva datos ficticios. Todavía no utiliza un modelo de IA ni cobra suscripciones. Los equipos con varios usuarios compartiendo una empresa siguen pendientes.</p>`);
+function renderChannels() {
+  return (
+    heading(
+      'Tres canales. Una sola bandeja.',
+      'Conecta cada cuenta cuando dispongas de los permisos necesarios.',
+    ) +
+    `<div class="info-banner">${icon('info')}<div><strong>Estado de preparación de Lukmi SRL.</strong><br>Meta: recuperación de acceso de administrador en curso. TikTok: solicitud de Accounts API en preparación; el acceso a mensajes se solicita por separado. Esta demo no comprueba el estado de tus cuentas.</div></div>
+ <div class="channels-grid">${CHANNELS.map((c) => `<article class="channel-card"><div class="card-top">${platform(c)}<span class="channel-state">Sin conectar</span></div><h3>${c}</h3><p>${c === 'TikTok' ? 'Comentarios y mensajes privados requieren sus respectivos permisos. El DM iniciado desde un comentario debe validarse para tu cuenta.' : 'Comentarios, respuesta pública y mensaje privado asociado al post, con autorización y revisión de permisos.'}</p><ul class="channel-capabilities"><li>✓ Flujo disponible en el simulador</li><li>${c === 'TikTok' ? '◷ Comment-to-Message por confirmar' : '◷ Autorización de la cuenta pendiente'}</li><li>◷ Envío real pendiente de conexión</li></ul><button class="btn" data-connect="${c}">Ver requisitos ${icon('arrow')}</button></article>`).join('')}</div><section class="panel"><h2>Lo que registra cada publicación</h2><div class="feature-strip"><span>${icon('layers')}Ficha de publicación</span><span>${icon('layers')}Precio y moneda</span><span>${icon('clock')}Horario y vigencia</span><span>${icon('message')}Respuesta pública y DM</span></div><p class="fine-print">Cada empresa conectará sus propias cuentas mediante autorización oficial. Las contraseñas no se solicitan en la plataforma.</p></section>`
+  );
+}
+function renderPlans() {
+  const ws = workspace(),
+    used = usage(ws),
+    limit = PLANS[ws.plan].limit;
+  return (
+    heading(
+      'Planes para el mercado boliviano.',
+      'Precios propuestos para validar con clientes · Sin cobros activos',
+      `<button class="btn" data-action="export">${icon('download')}Guardar copia</button><button class="btn" data-action="import">Importar copia</button>`,
+    ) +
+    `<div class="plans-grid">${Object.entries(PLANS)
+      .map(
+        ([id, p]) =>
+          `<article class="plan-card ${id === ws.plan ? 'featured' : ''}"><div class="row-end"><h3>${p.name}</h3>${id === ws.plan ? '<span class="plan-label">PLAN DE DEMO</span>' : ''}</div><p>${id === 'piloto' ? 'Para tus primeros clientes.' : id === 'negocio' ? 'Para el seguimiento diario de tu negocio.' : 'Para gestionar varios negocios.'}</p><div class="price"><small class="currency">Bs</small>${p.price}<small> / mes</small></div><ul><li>${p.accounts} cuentas entre los tres canales</li><li>${p.users} usuarios propuestos</li><li>${p.limit.toLocaleString('es-BO')} acciones automáticas / mes</li><li>Campañas con contenido por publicación</li><li>Comentarios y bandeja de mensajes</li></ul><button class="btn ${id === ws.plan ? 'primary' : ''}" data-plan="${id}">${id === ws.plan ? 'Plan seleccionado' : 'Probar este plan'}</button></article>`,
+      )
+      .join('')}</div>
+ <section class="panel"><div class="panel-heading"><h2>Uso del espacio de prueba</h2><span class="muted">${esc(ws.label)}</span></div><div class="usage-row"><span>Acciones automáticas</span><div class="track"><span style="width:${Math.min(100, (used / limit) * 100)}%"></span></div><small>${used} / ${limit}</small></div><p class="fine-print">Un DM y su confirmación pública cuentan como dos acciones. Las respuestas automáticas posteriores también cuentan. Las respuestas manuales no consumen este límite. El simulador detiene las automatizaciones al alcanzar la cuota; los pagos, usuarios y cuotas reales se implementarán en el servidor.</p></section>
+ <div class="info-banner">${icon('info')}<div>Estos planes son una propuesta comercial. Seleccionar uno cambia solo esta demo; no inicia una suscripción, un cobro ni una conexión.</div></div><input id="backup-input" type="file" accept="application/json,.json" hidden>`
+  );
+}
+function openDialog(title, body, button = '', submit = null, wide = false) {
+  dialog.classList.toggle('wide', wide);
+  draftCampaign = null;
+  document.getElementById('dialog-title').textContent = title;
+  document.getElementById('dialog-body').innerHTML = body;
+  document.getElementById('dialog-actions').innerHTML =
+    `<button type="button" class="btn" data-action="close">${submit ? 'Cancelar' : 'Entendido'}</button>${submit ? `<button class="btn primary" type="submit">${button || 'Guardar'}</button>` : ''}`;
+  dialogSubmit = submit;
+  dialog.showModal();
+}
+function openSimulator(campaignId) {
+  const selectedCampaign =
+    workspace().campaigns.find((c) => c.id === campaignId) || workspace().campaigns[0];
+  openDialog(
+    'Prueba el recorrido de tu cliente',
+    `<p class="dialog-copy">Selecciona el post y simula una pregunta. Puedes comprobar tanto el envío como su rechazo.</p><label class="field">Tipo de interacción<select name="source" id="simulate-source"><option value="comment">Comentario en una publicación</option><option value="dm">Mensaje privado entrante</option></select></label><label class="field">Publicación<select name="campaignId" id="simulate-campaign">${workspace()
+      .campaigns.map(
+        (c) =>
+          `<option value="${esc(c.id)}" ${c.id === selectedCampaign?.id ? 'selected' : ''}>${esc(c.channel + ' · ' + c.title + ' · ' + priceLabel(c))}</option>`,
+      )
+      .join(
+        '',
+      )}<option value="_none">Sin publicación asociada</option></select></label><div id="sim-no-post" hidden><label class="field">Canal<select name="channel">${CHANNELS.map((c) => `<option>${c}</option>`).join('')}</select></label></div><label class="field">Nombre de la persona<input name="name" required maxlength="70" value="Cliente de prueba"></label><label class="field">Pregunta<textarea name="text" required maxlength="1000">¿Cuánto cuesta?</textarea></label><div id="delivery-options"><label class="field">Resultado del envío privado<select name="delivery"><option value="success">Simular entrega correcta</option><option value="rejected">Simular que el canal rechaza el DM</option></select></label><label class="check-field" id="tiktok-option"><input type="checkbox" name="tiktokEnabled"> Simular Comment-to-Message habilitado en TikTok</label><p class="fine-print" id="tiktok-note">Esta casilla solo prueba el prototipo. No habilita mensajes en tu cuenta real.</p></div><div class="info-banner">${icon('info')}<span>Datos de prueba. No se conecta ninguna cuenta ni se envían mensajes reales.</span></div>`,
+    'Simular interacción',
+    (fd) => {
+      const name = String(fd.get('name')).trim(),
+        text = String(fd.get('text')).trim(),
+        campaign = workspace().campaigns.find((c) => c.id === fd.get('campaignId'));
+      if (!name || !text) {
+        toast('Escribe el nombre y la pregunta.');
+        return false;
+      }
+      const input = {
+        workspaceId: workspace().id,
+        id: makeId(),
+        externalId: makeId(),
+        name,
+        initials: name
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((x) => x[0])
+          .join('')
+          .toUpperCase(),
+        text,
+        channel: campaign?.channel || fd.get('channel') || 'Instagram',
+        postId: campaign?.postId || 'unconfigured-demo-post',
+        campaignId: campaign?.id,
+      };
+      const result =
+        fd.get('source') === 'comment'
+          ? processCampaignComment(workspace(), input, {
+              delivery: fd.get('delivery'),
+              tiktokCommentToMessage: fd.has('tiktokEnabled'),
+            })
+          : { event: receiveDirectMessage(workspace(), input) };
+      workspace().events.unshift(result.event);
+      selected = result.event.id;
+      filter = 'all';
+      query = '';
+      channelFilter = 'all';
+      threadTab = result.event.messages.some((m) => m.type === 'dm') ? 'dm' : 'public';
+      save();
+      navigate('inbox');
+      toast(
+        result.event.conversation === 'blocked'
+          ? 'DM sin enviar: se usa la invitación pública.'
+          : result.event.status === 'automatic'
+            ? 'Respuesta creada con la información de esta publicación.'
+            : 'La consulta quedó pendiente para tu equipo.',
+      );
+    },
+  );
+  syncSimulator();
+}
+function syncSimulator() {
+  if (!document.getElementById('simulate-source')) return;
+  const source = form.elements.source.value,
+    campaign = workspace().campaigns.find((c) => c.id === form.elements.campaignId.value);
+  document.getElementById('delivery-options').hidden = source === 'dm';
+  document.getElementById('sim-no-post').hidden = Boolean(campaign);
+  document.getElementById('tiktok-option').hidden = campaign?.channel !== 'TikTok';
+  document.getElementById('tiktok-note').hidden = campaign?.channel !== 'TikTok';
+}
+function getDraft() {
+  const fd = new FormData(form),
+    date = String(fd.get('expiresAt') || '');
+  return {
+    ...draftCampaign,
+    title: String(fd.get('title') || '').trim(),
+    postId: String(fd.get('postId') || '').trim(),
+    channel: String(fd.get('channel') || 'Instagram'),
+    product: String(fd.get('product') || '').trim(),
+    price: String(fd.get('price') || '').trim(),
+    currency: String(fd.get('currency') || draftCampaign.currency || 'Bs'),
+    operation: String(fd.get('operation') || draftCampaign.operation || ''),
+    propertyType: String(fd.get('propertyType') || draftCampaign.propertyType || ''),
+    location: String(fd.get('location') || draftCampaign.location || '').trim(),
+    area: String(fd.get('area') || draftCampaign.area || ''),
+    bedrooms: String(fd.get('bedrooms') ?? draftCampaign.bedrooms ?? ''),
+    bathrooms: String(fd.get('bathrooms') ?? draftCampaign.bathrooms ?? ''),
+    availability: String(fd.get('availability') || draftCampaign.availability || 'available'),
+    description: String(fd.get('description') || '').trim(),
+    hours: String(fd.get('hours') || '').trim(),
+    bookingUrl: String(fd.get('bookingUrl') || '').trim(),
+    keywords: String(fd.get('keywords') || '')
+      .split(',')
+      .map((k) => k.trim())
+      .filter(Boolean),
+    privateTemplate: String(fd.get('privateTemplate') || '').trim(),
+    publicTemplate: String(fd.get('publicTemplate') || '').trim(),
+    fallbackTemplate: String(fd.get('fallbackTemplate') || '').trim(),
+    action: String(fd.get('action') || 'both'),
+    autoFollowup: fd.has('autoFollowup'),
+    anyComment: fd.has('anyComment'),
+    expiresAt: date ? new Date(date + 'T23:59:59').toISOString() : '',
+  };
+}
+function field(label, name, value, options = {}) {
+  return `<label class="field">${label}${options.textarea ? `<textarea name="${name}" ${options.required ? 'required' : ''} maxlength="${options.max || 1000}">${esc(value)}</textarea>` : `<input name="${name}" type="${options.type || 'text'}" ${options.required ? 'required' : ''} ${options.type === 'number' ? 'min="0" step="0.01"' : ''} maxlength="${options.max || 150}" value="${esc(value)}">`}${options.note ? `<small>${options.note}</small>` : ''}</label>`;
+}
+function propertyFields(c) {
+  if (c.vertical !== 'realestate') return '';
+  return `<div class="field-pair"><label class="field">Operación<select name="operation">${['Venta', 'Alquiler', 'Anticrético'].map((v) => `<option ${c.operation === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label><label class="field">Tipo de inmueble<select name="propertyType">${['Departamento', 'Casa', 'Terreno', 'Oficina', 'Local comercial', 'Otro'].map((v) => `<option ${c.propertyType === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>${field('Zona y ciudad', 'location', c.location || '', { required: true, max: 200 })}<div class="field-pair">${field('Superficie en m²', 'area', c.area || '', { required: true, type: 'number' })}${field('Dormitorios', 'bedrooms', c.bedrooms ?? '', { required: true, type: 'number', note: 'Usa 0 si no aplica.' })}</div><div class="field-pair">${field('Baños', 'bathrooms', c.bathrooms ?? '', { required: true, type: 'number', note: 'Usa 0 si no aplica.' })}<label class="field">Disponibilidad<select name="availability"><option value="available" ${c.availability === 'available' ? 'selected' : ''}>Disponible</option><option value="reserved" ${c.availability === 'reserved' ? 'selected' : ''}>Reservado · revisar con asesor</option><option value="closed" ${c.availability === 'closed' ? 'selected' : ''}>Cerrado · revisar con asesor</option></select></label></div>`;
+}
+function openCampaign(id) {
+  const existing = workspace().campaigns.find((c) => c.id === id),
+    c = existing
+      ? { ...existing, keywords: [...existing.keywords] }
+      : newCampaign('Instagram', workspace().kind || 'general');
+  openDialog(
+    existing ? 'Editar campaña por publicación' : 'Nueva campaña por publicación',
+    `<div class="editor-layout"><div class="editor-fields"><div class="field-pair">${field('Nombre de la campaña', 'title', c.title, { required: true })}<label class="field">Canal<select name="channel">${CHANNELS.map((ch) => `<option ${c.channel === ch ? 'selected' : ''}>${ch}</option>`).join('')}</select></label></div>${field('ID o enlace de la publicación', 'postId', c.postId, { required: true, max: 400, note: 'En esta demo identifica el post que probarás. En producción se elegirá de tus publicaciones autorizadas.' })}<h3>Información de esta publicación</h3><div class="field-pair">${field(c.vertical === 'realestate' ? 'Nombre del inmueble' : 'Oferta o producto', 'product', c.product, { required: true })}${field('Precio', 'price', c.price, { required: true, type: 'number' })}</div><label class="field">Moneda<select name="currency"><option value="Bs" ${c.currency === 'Bs' ? 'selected' : ''}>Bolivianos (Bs)</option><option value="USD" ${c.currency === 'USD' ? 'selected' : ''}>Dólares (USD)</option></select></label>${propertyFields(c)}${field(c.vertical === 'realestate' ? 'Características del inmueble' : 'Detalles de la oferta', 'description', c.description, { required: true, textarea: true, max: 700 })}${field('Horario', 'hours', c.hours, { required: true, max: 180 })}<div class="field-pair">${field(c.vertical === 'realestate' ? 'Enlace para solicitar visita, opcional' : 'Enlace de reservas, opcional', 'bookingUrl', c.bookingUrl, { type: 'url', max: 300 })}${field('Vigente hasta, opcional', 'expiresAt', c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('sv-SE') : '', { type: 'date' })}</div><h3>Cuándo responder</h3>${field('Palabras o frases, separadas por comas', 'keywords', c.keywords.join(', '), { max: 300 })}<label class="check-field"><input type="checkbox" name="anyComment" ${c.anyComment ? 'checked' : ''}> Activar con cualquier comentario</label><label class="field">Acción<select name="action"><option value="both" ${c.action === 'both' ? 'selected' : ''}>Enviar DM y confirmar en público</option><option value="public" ${c.action === 'public' ? 'selected' : ''}>Solo responder públicamente</option></select></label><h3>Mensajes de la campaña</h3><p class="variable-help">Variables: {nombre}, {negocio}, {producto}, {precio}, {moneda}, {detalle}, {horario}, {reserva}${c.vertical === 'realestate' ? ', {operacion}, {zona}, {superficie}, {dormitorios}, {banos}, {tipo}' : ''}</p>${field('Mensaje privado', 'privateTemplate', c.privateTemplate, { textarea: true, max: 1000 })}${field('Respuesta pública', 'publicTemplate', c.publicTemplate, { required: true, textarea: true, max: 600 })}${field('Si no se puede enviar el DM', 'fallbackTemplate', c.fallbackTemplate, { textarea: true, max: 600 })}<label class="check-field"><input type="checkbox" name="autoFollowup" ${c.autoFollowup ? 'checked' : ''}> Responder preguntas habituales dentro del DM con los datos de esta publicación</label><p class="fine-print">${c.vertical === 'realestate' ? 'El seguimiento cubre precio, zona, características y solicitud de visita. Documentación, crédito y consultas sin información configurada pasan a un asesor. No confirma visitas ni disponibilidad.' : 'El seguimiento cubre precio, detalles, horario y solicitud de reserva. Otras preguntas pasan a tu equipo. No confirma reservas ni disponibilidad.'}</p><div id="campaign-errors" class="form-errors" role="alert"></div></div><aside class="editor-preview"><span class="eyebrow">VISTA PREVIA · DATOS DE PRUEBA</span><div id="campaign-preview"></div></aside></div>`,
+    'Guardar campaña',
+    () => {
+      const updated = getDraft(),
+        errors = validateCampaign(updated, workspace().campaigns);
+      if (errors.length) {
+        document.getElementById('campaign-errors').textContent = errors.join(' ');
+        document.getElementById('campaign-errors').scrollIntoView({ block: 'nearest' });
+        return false;
+      }
+      if (existing) workspace().campaigns[workspace().campaigns.indexOf(existing)] = updated;
+      else workspace().campaigns.push(updated);
+      save();
+      render();
+      toast('Campaña guardada. Las conversaciones anteriores conservan su información original.');
+    },
+    true,
+  );
+  draftCampaign = c;
+  updateCampaignPreview();
+}
+function updateCampaignPreview() {
+  if (!draftCampaign) return;
+  let c;
+  try {
+    c = getDraft();
+  } catch {
+    return;
+  }
+  const block = document.getElementById('campaign-preview');
+  let privateText, publicText;
+  try {
+    privateText = renderTemplate(c.privateTemplate, c, 'María', workspace().label);
+    publicText = renderTemplate(c.publicTemplate, c, 'María', workspace().label);
+  } catch (error) {
+    block.innerHTML = `<p class="form-errors">${esc(error.message)}</p>`;
+    return;
+  }
+  block.innerHTML = `<div class="preview-post"><span>${platform(c.channel)}</span><h3>${esc(c.product || (c.vertical === 'realestate' ? 'Tu inmueble' : 'Tu promoción'))}</h3><strong>${esc(priceLabel(c))}</strong>${c.vertical === 'realestate' ? `<p>${esc(c.operation)} · ${esc(c.location)}<br>${esc(c.area)} m² · ${esc(c.bedrooms)} dormitorios · ${esc(c.bathrooms)} baños</p>` : ''}<p>${esc(c.description || 'Añade el menú o los detalles de la oferta.')}</p><small>${esc(c.hours || 'Añade el horario')}</small></div><div class="preview-comment"><span class="avatar">ML</span><p>María<br><strong>¿Cuánto cuesta?</strong></p></div>${c.action === 'both' ? `<small class="preview-label">1. Mensaje privado</small><div class="thread-bubble preview-dm">${esc(privateText)}</div><small class="preview-label">2. Confirmación pública tras la entrega</small>` : '<small class="preview-label">Respuesta pública</small>'}<div class="thread-bubble preview-public">${esc(publicText)}</div>${c.channel === 'TikTok' && c.action === 'both' ? '<p class="fine-print">La disponibilidad del DM por comentario se validará para tu cuenta de TikTok.</p>' : ''}`;
+}
+function customerMessage() {
+  const e = eventById();
+  if (!e) return;
+  openDialog(
+    `Mensaje privado de ${e.name}`,
+    `<p class="dialog-copy">Simula que la persona escribe por DM. La conversación conserva la publicación de origen.</p><label class="field">Mensaje del cliente<textarea name="text" required maxlength="1000">${e.snapshot?.vertical === 'realestate' ? 'Quiero agendar una visita' : 'Quiero reservar una mesa'}</textarea></label>`,
+    'Recibir mensaje',
+    (fd) => {
+      try {
+        const updated = receivePrivateMessage(workspace(), e, String(fd.get('text')));
+        workspace().events[workspace().events.indexOf(e)] = updated;
+        threadTab = 'dm';
+        save();
+        render();
+        toast(
+          updated.status === 'automatic'
+            ? 'Pregunta habitual respondida en la simulación.'
+            : 'Nuevo mensaje pendiente para tu equipo.',
+        );
+      } catch (error) {
+        toast(error.message);
+        return false;
+      }
+    },
+  );
+}
+function connection(channel) {
+  const text =
+    channel === 'Instagram'
+      ? 'Podemos preparar la conexión directa mediante Instagram Login para una cuenta profesional. Necesitamos una aplicación de Meta que controles, su configuración y los permisos correspondientes. La conexión piloto de Instagram se configura desde la VM y puede enviar respuestas y DMs mediante reglas por publicación. Consulta los resultados en «Instagram: actividad real». El inicio de sesión de clientes con Instagram sigue pendiente.'
+      : channel === 'TikTok'
+        ? 'La solicitud de Accounts API cubre los comentarios. Para mensajes privados se necesita acceso a Business Messaging API, autorización de la cuenta y comprobar si admite Comment-to-Message. El simulador no confirma disponibilidad en Bolivia.'
+        : 'La conexión piloto de una página de Facebook se configura desde la VM con sus permisos y token de página. Puede recibir comentarios y mensajes y, al activar una regla por publicación, responder públicamente y enviar el privado por Messenger. Consulta «Facebook: actividad real». El acceso del portafolio y el de la página se revisan por separado.';
+  openDialog(
+    `Preparar ${channel}`,
+    `<p class="dialog-copy">${text}</p><div class="info-banner">${icon('info')}<span>Este diálogo es parte del simulador: no modifica permisos ni activa envíos. Las reglas reales de Instagram se administran por separado.</span></div>${channel === 'TikTok' ? '<p class="dialog-copy"><a class="text-link" href="https://business-api.tiktok.com/portal/docs/business-messaging-api-get-started/v1.3" target="_blank" rel="noopener noreferrer">Ver proceso oficial de Business Messaging ↗</a></p>' : ''}`,
+  );
+}
+function newWorkspace() {
+  openDialog(
+    'Nuevo espacio de prueba',
+    field('Nombre del negocio', 'name', '', { required: true, max: 80 }) +
+      '<label class="field">Sector<select name="kind"><option value="realestate">Inmobiliaria</option><option value="restaurant">Restaurante</option><option value="general">Otro negocio</option></select></label><p class="dialog-copy">Se creará un espacio vacío con sus propias campañas y conversaciones. En modo servidor pertenece a tu usuario; no invita a otras personas ni crea una suscripción.</p>',
+    'Crear espacio',
+    (fd) => {
+      const label = String(fd.get('name')).trim();
+      if (!label) {
+        toast('Escribe un nombre.');
+        return false;
+      }
+      const id = makeId();
+      data.workspaces[id] = {
+        id,
+        label,
+        kind: String(fd.get('kind')),
+        plan: 'negocio',
+        campaigns: [],
+        events: [],
+      };
+      data.current = id;
+      selected = null;
+      filter = 'all';
+      query = '';
+      save();
+      navigate('campaigns');
+      toast('Espacio de prueba creado. Añade tu primera publicación.');
+    },
+  );
+}
+function guide() {
+  const property = workspace().kind === 'realestate';
+  openDialog(
+    'Graba el flujo para la revisión',
+    `<ol class="recording-guide"><li>Abre <strong>Campañas por post</strong> y muestra ${property ? '«Departamento en Equipetrol»: precio, zona y características' : 'una oferta con sus detalles'}.</li><li>Pulsa <strong>Probar</strong> y simula «¿Cuánto cuesta?» en Instagram.</li><li>Muestra el <strong>DM con la ficha correcta</strong> y la confirmación en el comentario público.</li><li>Prueba ${property ? 'la casa en alquiler' : 'otra campaña'} y muestra que envía <strong>la información de esa otra publicación</strong>.</li><li>Pulsa <strong>Simular mensaje del cliente</strong>, escribe «${property ? 'Quiero agendar una visita' : 'Quiero reservar'}» y muestra el seguimiento.</li><li>Abre <strong>Prospectos</strong> y muestra la etapa ${property ? 'Visita solicitada' : 'Contactado'}. Las confirmaciones las registra una persona.</li><li>En TikTok, muestra la invitación pública cuando el DM está sin habilitar. Si pruebas el DM hipotético, identifica la casilla de simulación.</li></ol><div class="info-banner">${icon('info')}<span>Presenta el video como prototipo. No hay cuentas conectadas ni mensajes reales. TikTok revisará por separado los permisos y las funciones que solicites.</span></div>`,
+  );
+}
+function exportBackup() {
+  const blob = new Blob(
+      [JSON.stringify({ ...data, exportedAt: new Date().toISOString(), demo: true }, null, 2)],
+      { type: 'application/json' },
+    ),
+    url = URL.createObjectURL(blob),
+    a = document.createElement('a');
+  a.href = url;
+  a.download = 'conversa-campanas-y-conversaciones.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('Copia del prototipo descargada.');
+}
+document.addEventListener('click', (event) => {
+  const b = event.target.closest('button');
+  if (!b) return;
+  if (b.dataset.page) {
+    navigate(b.dataset.page);
+    return;
+  }
+  if (b.dataset.event) {
+    selected = b.dataset.event;
+    const e = eventById();
+    threadTab = e.messages.some((m) => m.type === 'dm') ? 'dm' : 'public';
+    document.getElementById('comment-list').innerHTML = listEvents();
+    document.getElementById('detail').innerHTML = renderDetail();
+    return;
+  }
+  if (b.dataset.thread) {
+    threadTab = b.dataset.thread;
+    document.getElementById('detail').innerHTML = renderDetail();
+    return;
+  }
+  if (b.dataset.filter) {
+    filter = b.dataset.filter;
+    const list = filtered();
+    if (!list.some((e) => e.id === selected)) selected = list[0]?.id;
+    render();
+    return;
+  }
+  if (b.dataset.editCampaign) {
+    openCampaign(b.dataset.editCampaign);
+    return;
+  }
+  if (b.dataset.lead) {
+    editLead(b.dataset.lead);
+    return;
+  }
+  if (b.dataset.openThread) {
+    selected = b.dataset.openThread;
+    filter = 'all';
+    query = '';
+    channelFilter = 'all';
+    threadTab = 'dm';
+    navigate('inbox');
+    return;
+  }
+  if (b.dataset.testCampaign) {
+    openSimulator(b.dataset.testCampaign);
+    return;
+  }
+  if (b.dataset.toggleCampaign) {
+    const c = workspace().campaigns.find((c) => c.id === b.dataset.toggleCampaign);
+    c.active = !c.active;
+    save();
+    render();
+    toast(c.active ? 'Campaña activada en la demo.' : 'Campaña pausada.');
+    return;
+  }
+  if (b.dataset.deleteCampaign) {
+    const id = b.dataset.deleteCampaign;
+    openDialog(
+      'Eliminar campaña',
+      '<p class="dialog-copy">Se eliminará la configuración de esta publicación. Se conservarán las conversaciones y sus mensajes anteriores.</p>',
+      'Eliminar',
+      () => {
+        workspace().campaigns = workspace().campaigns.filter((c) => c.id !== id);
+        save();
+        render();
+        toast('Campaña eliminada.');
+      },
+    );
+    return;
+  }
+  if (b.dataset.connect) {
+    connection(b.dataset.connect);
+    return;
+  }
+  if (b.dataset.plan) {
+    const id = b.dataset.plan;
+    openDialog(
+      `Plan ${PLANS[id].name}`,
+      `<p class="dialog-copy">Precio propuesto: Bs${PLANS[id].price} al mes. Seleccionarlo cambia el límite del simulador, sin iniciar pagos ni una suscripción real.</p>`,
+      'Seleccionar en la demo',
+      () => {
+        workspace().plan = id;
+        save();
+        render();
+        toast('Plan de prueba seleccionado. No se hizo ningún cobro.');
+      },
+    );
+    return;
+  }
+  const action = b.dataset.action;
+  if (action === 'close' || b.id === 'close-dialog') dialog.close();
+  if (action === 'simulate' || b.id === 'sidebar-simulate') openSimulator();
+  if (action === 'new-campaign') openCampaign();
+  if (action === 'customer-message') customerMessage();
+  if (b.id === 'help' && LIVE_PAGES[page]) {
+    openDialog(
+      'Tu centro de operaciones',
+      '<p class="dialog-copy">Resumen reúne tus canales y métricas de los últimos 7 días. En Actividad puedes revisar comentarios, mensajes y el resultado de cada envío. Automatizaciones permite editar mensajes y activar o pausar publicaciones. Canales muestra las cuentas y el estado guardado de su autorización.</p>',
+    );
+    return;
+  }
+  if (action === 'guide' || b.id === 'help') guide();
+  if (action === 'export') exportBackup();
+  if (action === 'import') document.getElementById('backup-input').click();
+  if (action === 'measurement') measurement();
+  if (action === 'resolve') {
+    const e = eventById();
+    if (e) {
+      e.conversation = e.conversation === 'closed' ? 'awaiting_team' : 'closed';
+      if (e.conversation !== 'closed') e.status = 'pending';
+      e.reason =
+        e.conversation === 'closed'
+          ? 'Marcada como resuelta por tu equipo.'
+          : 'Reabierta para tu equipo.';
+      save();
+      render();
+    }
+  }
+  if (action === 'use-suggestion') {
+    document.getElementById('reply').value =
+      document.querySelector('.suggested p')?.textContent || '';
+  }
+  if (b.id === 'profile')
+    openDialog(
+      'Conversa · Lukmi SRL',
+      `<p class="dialog-copy">${account.mode === 'server' ? 'Acceso autenticado. Las campañas y prospectos se guardan en el servidor, separados por usuario. Los ejemplos siguen siendo ficticios.' : 'Demo autónoma con guardado en este navegador.'}<br><br>Las conexiones reales de Instagram y Facebook se consultan y gestionan desde el centro de operaciones. Esta sección de demo conserva datos ficticios. Todavía no utiliza un modelo de IA ni cobra suscripciones. Los equipos con varios usuarios compartiendo una empresa siguen pendientes.</p>`,
+    );
 });
-form.addEventListener('submit',event=>{event.preventDefault();try{if(dialogSubmit&&dialogSubmit(new FormData(form))!==false)dialog.close();}catch(error){toast(error.message);}});
-form.addEventListener('input',()=>updateCampaignPreview());
-form.addEventListener('change',event=>{
- if(event.target.name==='action'&&draftCampaign){const t=form.elements.publicTemplate;if(event.target.value==='public'&&t.value===newCampaign('Instagram',draftCampaign.vertical||'general').publicTemplate)t.value='{producto}: {moneda}{precio}. {detalle} Horario: {horario}.';else if(event.target.value==='both'&&t.value==='{producto}: {moneda}{precio}. {detalle} Horario: {horario}.')t.value=newCampaign('Instagram',draftCampaign.vertical||'general').publicTemplate;}
- syncSimulator();updateCampaignPreview();
+form.addEventListener('submit', (event) => {
+  event.preventDefault();
+  try {
+    if (dialogSubmit && dialogSubmit(new FormData(form)) !== false) dialog.close();
+  } catch (error) {
+    toast(error.message);
+  }
 });
-document.addEventListener('submit',event=>{if(event.target.id!=='reply-form')return;event.preventDefault();const e=eventById(),fd=new FormData(event.target);try{workspace().events[workspace().events.indexOf(e)]=manualReply(workspace(),e,String(fd.get('reply')),String(fd.get('type')));save();render();toast('Respuesta manual guardada en el prototipo.');}catch(error){toast(error.message);}});
-document.getElementById('workspace').addEventListener('change',event=>{if(event.target.value==='_new'){event.target.value=data.current;newWorkspace();return;}data.current=event.target.value;selected=workspace().events[0]?.id;query='';filter='all';channelFilter='all';save();render();toast(`Espacio: ${workspace().label}`);});
-main.addEventListener('input',event=>{if(event.target.id==='search'){query=event.target.value;const entries=filtered();if(!entries.some(e=>e.id===selected))selected=entries[0]?.id;document.getElementById('comment-list').innerHTML=listEvents();document.getElementById('detail').innerHTML=renderDetail();}});
-main.addEventListener('change',async event=>{
- if(event.target.id==='channel-filter'){channelFilter=event.target.value;const entries=filtered();if(!entries.some(e=>e.id===selected))selected=entries[0]?.id;render();}
- if(event.target.id==='backup-input'){
-   const file=event.target.files[0];if(!file)return;if(file.size>2*1024*1024){toast('La copia supera el límite de 2 MB del prototipo.');return;}
-   try{const imported=JSON.parse(await file.text());if(!validState(imported))throw new Error('La copia no corresponde a esta versión de Conversa.');openDialog('Restaurar copia','<p class="dialog-copy">Se reemplazarán los datos actuales por la copia seleccionada. En modo servidor, el cambio se guardará en tu cuenta. Puedes cancelar y exportar tus datos actuales primero.</p>','Restaurar',()=>{data=imported;selected=workspace().events[0]?.id;filter='all';channelFilter='all';query='';save();render();toast('Copia restaurada.');});}catch(error){toast(error.message);}
- }
+form.addEventListener('input', () => updateCampaignPreview());
+form.addEventListener('change', (event) => {
+  if (event.target.name === 'action' && draftCampaign) {
+    const t = form.elements.publicTemplate;
+    if (
+      event.target.value === 'public' &&
+      t.value === newCampaign('Instagram', draftCampaign.vertical || 'general').publicTemplate
+    )
+      t.value = '{producto}: {moneda}{precio}. {detalle} Horario: {horario}.';
+    else if (
+      event.target.value === 'both' &&
+      t.value === '{producto}: {moneda}{precio}. {detalle} Horario: {horario}.'
+    )
+      t.value = newCampaign('Instagram', draftCampaign.vertical || 'general').publicTemplate;
+  }
+  syncSimulator();
+  updateCampaignPreview();
 });
-window.addEventListener('hashchange',()=>{const hash=location.hash.slice(1);if(titles[hash]){page=hash;render();}});
-render();if(account.mode==='local')save();
-if(account.mode==='server'){
- let localCopy;
- try{localCopy=JSON.parse(localStorage.getItem('conversa-demo-v2')||'null');}catch{}
- if(validState(localCopy)){
-  const button=document.createElement('button');button.className='text-btn';button.textContent='Importar datos anteriores del navegador';
-  button.addEventListener('click',()=>openDialog('Importar datos anteriores',`<p class="dialog-copy">Se copiarán los espacios ${Object.values(localCopy.workspaces).map(w=>esc(w.label)).join(', ')} del navegador a la cuenta ${esc(account.user.email)}. Reemplazará los datos actuales de esa cuenta. Puedes cancelar y exportarlos primero. La copia local original se conservará.</p>`,'Importar a mi cuenta',()=>{data=upgradeIndustry(structuredClone(localCopy));selected=workspace().events[0]?.id;filter='all';query='';channelFilter='all';save();render();toast('Importación enviada. Revisa el indicador de guardado.');}));
-  document.querySelector('.account-tools').append(button);
- }
+document.addEventListener('submit', (event) => {
+  if (event.target.id !== 'reply-form') return;
+  event.preventDefault();
+  const e = eventById(),
+    fd = new FormData(event.target);
+  try {
+    workspace().events[workspace().events.indexOf(e)] = manualReply(
+      workspace(),
+      e,
+      String(fd.get('reply')),
+      String(fd.get('type')),
+    );
+    save();
+    render();
+    toast('Respuesta manual guardada en el prototipo.');
+  } catch (error) {
+    toast(error.message);
+  }
+});
+document.getElementById('workspace').addEventListener('change', (event) => {
+  if (event.target.value === '_new') {
+    event.target.value = data.current;
+    newWorkspace();
+    return;
+  }
+  data.current = event.target.value;
+  selected = workspace().events[0]?.id;
+  query = '';
+  filter = 'all';
+  channelFilter = 'all';
+  save();
+  render();
+  toast(`Espacio: ${workspace().label}`);
+});
+main.addEventListener('input', (event) => {
+  if (event.target.id === 'search') {
+    query = event.target.value;
+    const entries = filtered();
+    if (!entries.some((e) => e.id === selected)) selected = entries[0]?.id;
+    document.getElementById('comment-list').innerHTML = listEvents();
+    document.getElementById('detail').innerHTML = renderDetail();
+  }
+});
+main.addEventListener('change', async (event) => {
+  if (event.target.id === 'channel-filter') {
+    channelFilter = event.target.value;
+    const entries = filtered();
+    if (!entries.some((e) => e.id === selected)) selected = entries[0]?.id;
+    render();
+  }
+  if (event.target.id === 'backup-input') {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast('La copia supera el límite de 2 MB del prototipo.');
+      return;
+    }
+    try {
+      const imported = JSON.parse(await file.text());
+      if (!validState(imported))
+        throw new Error('La copia no corresponde a esta versión de Conversa.');
+      openDialog(
+        'Restaurar copia',
+        '<p class="dialog-copy">Se reemplazarán los datos actuales por la copia seleccionada. En modo servidor, el cambio se guardará en tu cuenta. Puedes cancelar y exportar tus datos actuales primero.</p>',
+        'Restaurar',
+        () => {
+          data = imported;
+          selected = workspace().events[0]?.id;
+          filter = 'all';
+          channelFilter = 'all';
+          query = '';
+          save();
+          render();
+          toast('Copia restaurada.');
+        },
+      );
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+});
+window.addEventListener('hashchange', () => {
+  const hash = location.hash.slice(1);
+  if (titles[hash]) {
+    page = hash;
+    render();
+  }
+});
+render();
+if (account.mode === 'local') save();
+if (account.mode === 'server') {
+  let localCopy;
+  try {
+    localCopy = JSON.parse(localStorage.getItem('conversa-demo-v2') || 'null');
+  } catch {}
+  if (validState(localCopy)) {
+    const button = document.createElement('button');
+    button.className = 'text-btn';
+    button.textContent = 'Importar datos anteriores del navegador';
+    button.addEventListener('click', () =>
+      openDialog(
+        'Importar datos anteriores',
+        `<p class="dialog-copy">Se copiarán los espacios ${Object.values(localCopy.workspaces)
+          .map((w) => esc(w.label))
+          .join(
+            ', ',
+          )} del navegador a la cuenta ${esc(account.user.email)}. Reemplazará los datos actuales de esa cuenta. Puedes cancelar y exportarlos primero. La copia local original se conservará.</p>`,
+        'Importar a mi cuenta',
+        () => {
+          data = upgradeIndustry(structuredClone(localCopy));
+          selected = workspace().events[0]?.id;
+          filter = 'all';
+          query = '';
+          channelFilter = 'all';
+          save();
+          render();
+          toast('Importación enviada. Revisa el indicador de guardado.');
+        },
+      ),
+    );
+    document.querySelector('.account-tools').append(button);
+  }
 }

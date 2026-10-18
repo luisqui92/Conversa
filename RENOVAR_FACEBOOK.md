@@ -1,3 +1,5 @@
+> Referencia del piloto anterior. Para la versión multicliente, usa [la guía de operación actual](docs/operacion/multicliente.md).
+
 # Renovar la autorización de Facebook
 
 Conversa amplía primero una autorización nueva de USUARIO mediante

@@ -3,13 +3,27 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { probeMention, recognizedMention, authorFromEvents, sameCommentId } from './facebook-mention.mjs';
+import {
+  probeMention,
+  recognizedMention,
+  authorFromEvents,
+  sameCommentId,
+} from './facebook-mention.mjs';
 
-const config = { accountId: '123456789012345', ownerId: 'owner', accessToken: 'private-test-token' };
-const action = { account_id: config.accountId, user_id: config.ownerId,
-  media_id: config.accountId + '_234567890123456', comment_id: '234567890123456_345678901234567' };
-const authorId = '456789012345678', replyId = '234567890123456_567890123456789';
-const ok = data => ({ ok: true, status: 200, json: async () => data });
+const config = {
+  accountId: '123456789012345',
+  ownerId: 'owner',
+  accessToken: 'private-test-token',
+};
+const action = {
+  account_id: config.accountId,
+  user_id: config.ownerId,
+  media_id: config.accountId + '_234567890123456',
+  comment_id: '234567890123456_345678901234567',
+};
+const authorId = '456789012345678',
+  replyId = '234567890123456_567890123456789';
+const ok = (data) => ({ ok: true, status: 200, json: async () => data });
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), 'conversa-mention-'));
   const calls = [];
@@ -18,29 +32,46 @@ function fixture() {
     assert.ok(!url.includes(config.accessToken));
     assert.equal(options.headers.Authorization, 'Bearer ' + config.accessToken);
     if (url.includes('/me?')) return ok({ id: config.accountId });
-    if (url.includes('/' + action.media_id + '?')) return ok({ id: action.media_id, from: { id: config.accountId } });
-    if (url.includes('/' + action.comment_id + '?')) return ok({ id: action.comment_id, from: { id: authorId } });
+    if (url.includes('/' + action.media_id + '?'))
+      return ok({ id: action.media_id, from: { id: config.accountId } });
+    if (url.includes('/' + action.comment_id + '?'))
+      return ok({ id: action.comment_id, from: { id: authorId } });
     if (options.method === 'POST') return ok({ id: replyId });
-    return ok({ id: replyId, parent: { id: action.comment_id }, is_hidden: false, message_tags: [{ id: authorId }] });
+    return ok({
+      id: replyId,
+      parent: { id: action.comment_id },
+      is_hidden: false,
+      message_tags: [{ id: authorId }],
+    });
   };
-  return { dir, calls, args: { config, action, markerPath: join(dir, 'probe.json'), mode: 'test', request },
-    close: () => rmSync(dir, { recursive: true, force: true }) };
+  return {
+    dir,
+    calls,
+    args: { config, action, markerPath: join(dir, 'probe.json'), mode: 'test', request },
+    close: () => rmSync(dir, { recursive: true, force: true }),
+  };
 }
 
 test('Comprueba identidad y propiedad, menciona solo al autor y verifica el resultado sin DM', async () => {
   const f = fixture();
   try {
     const result = await probeMention(f.args);
-    assert.equal(result.etiquetaReconocida, true); assert.equal(result.dentroDelComentario, true);
-    const posts = f.calls.filter(c => c.options.method === 'POST'); assert.equal(posts.length, 1);
+    assert.equal(result.etiquetaReconocida, true);
+    assert.equal(result.dentroDelComentario, true);
+    const posts = f.calls.filter((c) => c.options.method === 'POST');
+    assert.equal(posts.length, 1);
     assert.ok(posts[0].url.endsWith('/' + action.comment_id + '/comments'));
-    assert.deepEqual(JSON.parse(posts[0].options.body), { message: `@[${authorId}] Prueba de mención de Conversa.` });
+    assert.deepEqual(JSON.parse(posts[0].options.body), {
+      message: `@[${authorId}] Prueba de mención de Conversa.`,
+    });
     assert.equal(statSync(f.args.markerPath).mode & 0o777, 0o600);
     assert.ok(!readFileSync(f.args.markerPath, 'utf8').includes(config.accessToken));
     await assert.rejects(probeMention(f.args), /Ya se intentó/);
     await probeMention({ ...f.args, mode: 'inspect' });
-    assert.equal(f.calls.filter(c => c.options.method === 'POST').length, 1);
-  } finally { f.close(); }
+    assert.equal(f.calls.filter((c) => c.options.method === 'POST').length, 1);
+  } finally {
+    f.close();
+  }
 });
 test('No confunde texto, etiquetas de otra persona o datos ausentes con mención confirmada', () => {
   assert.equal(recognizedMention(undefined, authorId), null);
@@ -52,10 +83,15 @@ test('No confunde texto, etiquetas de otra persona o datos ausentes con mención
 test('Rechaza comentarios de otra cuenta/propietario y lectura no crea una prueba', async () => {
   const f = fixture();
   try {
-    await assert.rejects(probeMention({ ...f.args, action: { ...action, user_id: 'other' } }), /propietario/);
+    await assert.rejects(
+      probeMention({ ...f.args, action: { ...action, user_id: 'other' } }),
+      /propietario/,
+    );
     await assert.rejects(probeMention({ ...f.args, mode: 'inspect' }), /Todavía no hay/);
     assert.equal(f.calls.length, 0);
-  } finally { f.close(); }
+  } finally {
+    f.close();
+  }
 });
 test('Sin identidad de página, propiedad del post o autor, no hay POST', async () => {
   for (const target of ['identity', 'post', 'author']) {
@@ -63,67 +99,102 @@ test('Sin identidad de página, propiedad del post o autor, no hay POST', async 
     try {
       const request = async (url, options) => {
         if (target === 'identity' && url.includes('/me?')) return ok({ id: authorId });
-        if (target === 'post' && url.includes('/' + action.media_id + '?')) return ok({ id: action.media_id, from: { id: authorId } });
-        if (target === 'author' && url.includes('/' + action.comment_id + '?')) return ok({ id: action.comment_id });
+        if (target === 'post' && url.includes('/' + action.media_id + '?'))
+          return ok({ id: action.media_id, from: { id: authorId } });
+        if (target === 'author' && url.includes('/' + action.comment_id + '?'))
+          return ok({ id: action.comment_id });
         return f.args.request(url, options);
       };
       await assert.rejects(probeMention({ ...f.args, request }));
-      assert.equal(f.calls.filter(c => c.options.method === 'POST').length, 0);
-    } finally { f.close(); }
+      assert.equal(f.calls.filter((c) => c.options.method === 'POST').length, 0);
+    } finally {
+      f.close();
+    }
   }
 });
 test('Recupera el autor de un evento de la misma página, post y comentario; rechaza otros hilos y conflictos', () => {
-  const entry = { id: config.accountId, changes: [{ field: 'feed', value: {
-    item: 'comment', verb: 'add', post_id: action.media_id, parent_id: action.media_id,
-    comment_id: action.comment_id, from: { id: authorId }
-  } }] };
+  const entry = {
+    id: config.accountId,
+    changes: [
+      {
+        field: 'feed',
+        value: {
+          item: 'comment',
+          verb: 'add',
+          post_id: action.media_id,
+          parent_id: action.media_id,
+          comment_id: action.comment_id,
+          from: { id: authorId },
+        },
+      },
+    ],
+  };
   assert.equal(authorFromEvents(config, action, [entry]), authorId);
   assert.equal(authorFromEvents(config, action, [{ ...entry, id: authorId }]), null);
   for (const override of [
-    { post_id: '999999999999999' }, { parent_id: action.comment_id },
-    { comment_id: '999999999999999' }, { verb: 'edit' }, { item: 'post' }
+    { post_id: '999999999999999' },
+    { parent_id: action.comment_id },
+    { comment_id: '999999999999999' },
+    { verb: 'edit' },
+    { item: 'post' },
   ]) {
-    const modified = { ...entry, changes: [{ field: 'feed', value: { ...entry.changes[0].value, ...override } }] };
+    const modified = {
+      ...entry,
+      changes: [{ field: 'feed', value: { ...entry.changes[0].value, ...override } }],
+    };
     assert.equal(authorFromEvents(config, action, [modified]), null);
   }
-  const conflicting = { ...entry, changes: [{ field: 'feed', value: { ...entry.changes[0].value, from: { id: '999999999999999' } } }] };
+  const conflicting = {
+    ...entry,
+    changes: [
+      { field: 'feed', value: { ...entry.changes[0].value, from: { id: '999999999999999' } } },
+    ],
+  };
   assert.throws(() => authorFromEvents(config, action, [entry, conflicting]), /no coinciden/);
 });
 test('Graph puede omitir from o devolver un ID simple: usa el evento guardado sin inventar un autor', async () => {
   const f = fixture();
   try {
     const request = async (url, options) => {
-      if (url.includes('/' + action.comment_id + '?')) return ok({ id: action.comment_id.split('_').at(-1) });
+      if (url.includes('/' + action.comment_id + '?'))
+        return ok({ id: action.comment_id.split('_').at(-1) });
       return f.args.request(url, options);
     };
     const result = await probeMention({ ...f.args, request, storedAuthorId: authorId });
     assert.equal(result.etiquetaReconocida, true);
     assert.equal(result.fuenteAutor, 'Webhook firmado guardado');
-    assert.equal(f.calls.filter(c => c.options.method === 'POST').length, 1);
+    assert.equal(f.calls.filter((c) => c.options.method === 'POST').length, 1);
     assert.equal(sameCommentId('999999999999999_345678901234567', action.comment_id), false);
     assert.equal(sameCommentId(undefined, action.comment_id), false);
-  } finally { f.close(); }
+  } finally {
+    f.close();
+  }
 });
 test('No usa el autor del evento si Graph identifica otro autor o si el autor es la página', async () => {
   for (const storedAuthorId of ['999999999999999', config.accountId]) {
     const f = fixture();
     try {
       const request = async (url, options) => {
-        if (storedAuthorId === config.accountId && url.includes('/' + action.comment_id + '?')) return ok({ id: action.comment_id });
+        if (storedAuthorId === config.accountId && url.includes('/' + action.comment_id + '?'))
+          return ok({ id: action.comment_id });
         return f.args.request(url, options);
       };
       await assert.rejects(probeMention({ ...f.args, request, storedAuthorId }));
-      assert.equal(f.calls.filter(c => c.options.method === 'POST').length, 0);
-    } finally { f.close(); }
+      assert.equal(f.calls.filter((c) => c.options.method === 'POST').length, 0);
+    } finally {
+      f.close();
+    }
   }
 });
 test('Dos ejecuciones concurrentes no duplican el POST', async () => {
   const f = fixture();
   try {
     const result = await Promise.allSettled([probeMention(f.args), probeMention(f.args)]);
-    assert.equal(result.filter(r => r.status === 'fulfilled').length, 1);
-    assert.equal(f.calls.filter(c => c.options.method === 'POST').length, 1);
-  } finally { f.close(); }
+    assert.equal(result.filter((r) => r.status === 'fulfilled').length, 1);
+    assert.equal(f.calls.filter((c) => c.options.method === 'POST').length, 1);
+  } finally {
+    f.close();
+  }
 });
 test('Un envío incierto o rechazado no se repite y no expone errores privados', async () => {
   for (const failure of ['network', 'rejected', 'no-id']) {
@@ -133,11 +204,20 @@ test('Un envío incierto o rechazado no se repite y no expone errores privados',
         if (options.method !== 'POST') return f.args.request(url, options);
         if (failure === 'network') throw new Error(config.accessToken);
         if (failure === 'no-id') return ok({ success: true });
-        return { ok: false, status: 400, json: async () => ({ error: { code: 190, message: config.accessToken } }) };
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({ error: { code: 190, message: config.accessToken } }),
+        };
       };
-      await assert.rejects(probeMention({ ...f.args, request }), error => !error.message.includes(config.accessToken));
+      await assert.rejects(
+        probeMention({ ...f.args, request }),
+        (error) => !error.message.includes(config.accessToken),
+      );
       await assert.rejects(probeMention(f.args), /Ya se intentó/);
       assert.equal(JSON.parse(readFileSync(f.args.markerPath, 'utf8')).status, 'sending');
-    } finally { f.close(); }
+    } finally {
+      f.close();
+    }
   }
 });

@@ -1,3 +1,5 @@
+> Referencia del piloto anterior. Para la versión multicliente, usa [la guía de operación actual](docs/operacion/multicliente.md).
+
 # Actualizar Conversa: acceso y guardado en servidor
 
 Para la siguiente etapa de conexión piloto de Instagram, ver [CONECTAR_INSTAGRAM.md](CONECTAR_INSTAGRAM.md). El resto de esta guía describe la etapa de acceso y almacenamiento, sin credenciales de proveedores.

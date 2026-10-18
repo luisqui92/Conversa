@@ -1,71 +1,53 @@
 # Conversa
 
-Plataforma en desarrollo de ChatGo / Lukmi SRL para campañas por publicación y seguimiento de prospectos, con foco en inmobiliarias de Bolivia.
+Plataforma en desarrollo de Lukmi SRL para responder comentarios y enviar información por Instagram o Messenger. La versión multicliente permite crear negocios desde el panel, mantener sus cuentas separadas y conectar varias cuentas sociales por negocio en una misma instalación.
 
-## Estado actual
+## Funciones disponibles
 
-- Acceso por correo y contraseña, con usuarios creados desde la VM.
-- Sesiones de 12 horas con cookie Secure, HttpOnly y SameSite=Strict.
-- Campañas, conversaciones simuladas y prospectos guardados en SQLite en servidor, separados por usuario.
-- Control de versiones para evitar que una pestaña antigua sobrescriba cambios nuevos.
-- Importación opcional de la demo anterior del navegador, conservando su copia original.
-- Cada usuario tiene datos privados propios; equipos compartiendo una empresa y administración web de usuarios siguen pendientes.
+- Acceso privado por correo y contraseña. El administrador crea clientes en **Clientes**; cada cliente entra a su propio espacio. Un acceso propietario por negocio; los equipos con varios colaboradores aún no están implementados.
+- Conexión y reconexión mediante la autorización oficial de Meta desde **Canales**, con selección explícita de la página de Facebook.
+- Webhooks y workers que procesan varias cuentas sin mezclar credenciales, reglas, actividad ni notificaciones.
+- Reglas por publicación: respuesta pública primero y mensaje privado después. Filtros por palabras clave y pausa por persona/publicación, inicialmente 24 horas en las reglas nuevas del panel.
+- Estados explícitos para comentarios omitidos por antigüedad, límite o repetición. Avisos persistentes al completar el flujo, fallar o quedar incierto; campana actualizada cada cinco segundos mientras el panel está visible.
+- Actividad de 7, 30 o 90 días; datos de acciones conservados 90 días y eventos de diagnóstico siete días. No equivale a medir ventas o conversiones.
+- Tokens cifrados con AES-256-GCM y una llave fuera del volumen de SQLite. Renovación periódica de tokens largos válidos de Instagram y comprobación diaria de Facebook. Meta puede revocar autorizaciones; Facebook permite reconectar desde Canales.
 
-Se incluye un receptor de webhooks de Instagram y un asistente de configuración desde la VM para una cuenta profesional de prueba: [CONECTAR_INSTAGRAM.md](CONECTAR_INSTAGRAM.md). Requiere instalar esta versión, introducir credenciales y configurar Meta. No conecta automáticamente las cuentas.
+El código de autorización está implementado, pero **atender clientes externos requiere que Meta apruebe los permisos y que se registren las URLs de retorno**. La campana de Facebook, la llegada a la bandeja principal y la lectura del DM dependen de Meta. Una respuesta aceptada por su API no garantiza esos resultados.
 
-**El panel principal muestra actividad real de Instagram y Facebook.** Resumen, Actividad, Automatizaciones y Canales consultan las conexiones existentes del propietario. Permite editar los mensajes por publicación y pausar o reactivar reglas desde la web, con control de versiones. La campana guarda los resultados de cada automatización y los avisos pendientes de lectura, con actualización cada cinco segundos mientras el panel está visible. La demo anterior se conserva en **Explorar demo**, con sus datos de ejemplo. Consulta [PANEL_REAL.md](PANEL_REAL.md) para instalarlo y conocer sus límites.
+## Instalar o actualizar
 
-El flujo real responde primero al comentario y luego solicita un DM. Los resultados indican aceptación por la API, no lectura ni notificación. La vinculación inicial y renovación de credenciales siguen siendo administrativas; la respuesta manual a mensajes entrantes, IA, OAuth para clientes, Pixel y cobros siguen pendientes. Ver [AUTOMATIZAR_INSTAGRAM.md](AUTOMATIZAR_INSTAGRAM.md), [CONECTAR_FACEBOOK.md](CONECTAR_FACEBOOK.md) y [RENOVAR_FACEBOOK.md](RENOVAR_FACEBOOK.md).
+Usa la [guía multicliente](docs/operacion/multicliente.md). El script `sudo bash deploy-vm.sh` conserva el proyecto Compose `conversa-demo` y su volumen de datos, detiene el worker antes de migrar y guarda un respaldo previo. Importa las conexiones piloto existentes sin volver a introducir sus tokens.
 
-## Actualizar la VM de Google Cloud
+La copia de migración permanece en el mismo disco: **el respaldo fuera de la VM y la monitorización externa siguen pendientes de configuración**. El panel muestra esa limitación al administrador. Guarda tanto los datos como la llave antes de incorporar información comercial.
 
-El usuario ya instaló y comprobó Docker Engine y Compose en Ubuntu 24.04 x86_64. El despliegue conserva el nombre de proyecto Compose `conversa-demo` para reutilizar los volúmenes de certificados y datos al cambiar de carpeta.
+Las guías antiguas de conexión por SSH se mantienen como referencia de diagnóstico del piloto. La guía multicliente es la referencia para esta versión. No ejecutar `docker compose down -v` ni borrar los volúmenes.
 
-Consulta [ACTUALIZAR_BACKEND.md](ACTUALIZAR_BACKEND.md). La nueva versión agrega la API interna y un volumen de SQLite. No publica el puerto de la API a internet: Caddy sirve HTTPS y deriva `/api/*` al servicio interno.
+## Desarrollo y comprobación
 
-Las páginas públicas de [privacidad](dist/privacidad/index.html), [condiciones](dist/terminos/index.html) y [eliminación de datos](dist/eliminar-datos/index.html) se sirven sin sesión. Consulta [CONFIGURAR_META.md](CONFIGURAR_META.md) para instalarlas y registrar sus URLs en la app nueva de Meta. La eliminación se solicita por correo y requiere gestión manual del operador.
-
-Una vez levantado el servicio, crear el primer usuario dentro de la VM:
-
-```bash
-sudo docker compose -f compose.vm.yaml exec api node backend/admin.mjs create-user
-```
-
-Solicita el correo y la contraseña dos veces. La contraseña se introduce oculta y requiere al menos 10 caracteres. No hay contraseña predeterminada ni registro público. No se requieren credenciales de Meta para esta etapa.
-
-## Comprobar
-
-Requiere Node 24 o superior, con `node:sqlite`:
+Requiere Node **24**, Docker para las verificaciones de contenedor y npm para las herramientas de desarrollo. La aplicación no instala dependencias de ejecución.
 
 ```bash
-node checks.mjs
-node backend/checks.mjs
-node backend/instagram-checks.mjs
-node backend/instagram-automation-checks.mjs
-node backend/facebook-checks.mjs
-node backend/panel-checks.mjs
-node backend/notification-checks.mjs
+npm ci --ignore-scripts
+npm run lint
+npm run format:check
+npm test
+docker build -f backend/Dockerfile -t conversa-check .
 ```
 
-Pasan los 56 casos originales y las nuevas pruebas de autenticación, aislamiento, expiración, límites de acceso, persistencia, conflictos de guardado y cola de cambios del navegador. Las pruebas de rutas se ejecutan en proceso, sin sockets. El panel se comprobó en Chromium de escritorio y móvil con datos temporales, incluidos los cambios de reglas mediante la API real. El contenedor se construyó y pasó las pruebas del panel y su endpoint de salud. La instalación actualizada en la VM requiere comprobación después del despliegue.
+GitHub Actions ejecuta esos controles en cada push a `main` y en pull requests. Las pruebas cubren separación de clientes, cifrado, migración y restauración, estados OAuth de un solo uso, sesiones, colas, notificaciones, políticas de automatización y renovación. Los contratos de Meta se prueban con respuestas simuladas; las autorizaciones reales se verifican después de configurar la aplicación en Meta.
 
-## Archivos principales
+El panel también se comprobó con Chromium en escritorio y móvil, creando un cliente, editando reglas, revisando el aislamiento de su actividad e iniciando la autorización. La imagen Docker se comprobó con datos temporales: migración de dos conexiones, inicio, salud, login y acceso administrativo.
 
-- `dist/`: panel real, simulador y cliente de sesión/guardado.
-- `PANEL_REAL.md`: instalación y uso de Resumen, Actividad, Automatizaciones y Canales.
-- `backend/`: servidor HTTP, base SQLite, administración local y copia de seguridad.
-- `compose.vm.yaml`, `Caddyfile.vm`, `deploy-vm.sh`: despliegue en Google Cloud VM.
-- `ACTUALIZAR_BACKEND.md`: actualización, creación de usuarios y operación.
-- `CONECTAR_INSTAGRAM.md`: credenciales privadas y primer receptor de eventos de Instagram.
-- `CONFIGURAR_META.md`: páginas públicas y campos de configuración básica de Meta.
-- `AUTOMATIZAR_INSTAGRAM.md`: regla piloto por publicación, orden público → DM, pausa y diagnóstico.
-- `CONECTAR_FACEBOOK.md`: token de página, webhook de Page y flujo de comentario a Messenger.
-- `RENOVAR_FACEBOOK.md`: intercambio para obtener una autorización duradera y comprobación de vigencia.
-- `PUBLICAR_GOOGLE.md`: guía de la publicación inicial estática; para esta versión usar la guía de actualización.
-- `package.py`: genera una demo autónoma que sigue usando guardado local.
+## Organización
 
-## Modo local y datos
+- `dist/`: panel real y demo de datos de ejemplo, claramente separada.
+- `backend/channel-accounts.mjs`: negocios y almacén cifrado de conexiones.
+- `backend/oauth.mjs`: autorización con Meta y selección de páginas.
+- `backend/comment-automation-store.mjs`: cola común con canal y cuenta explícitos.
+- `backend/credential-maintenance.mjs`: mantenimiento de autorizaciones.
+- `backend/initialize.mjs`: respaldo e importación de la instalación anterior.
+- `docs/operacion/multicliente.md`: instalación, permisos, respaldo y recuperación.
+- `compose.vm.yaml`, `Caddyfile.vm`, `deploy-vm.sh`: publicación en la VM.
+- `package.py`: genera una demo autónoma con almacenamiento local para presentaciones.
 
-`dist/index.html` usa el backend por defecto y no vuelve silenciosamente a guardar en el navegador si la API falla. Con `python3 package.py` se genera `conversa-demo.html` con modo local explícito para demostraciones sin servidor.
-
-En servidor, SQLite vive en el volumen `conversa-demo_conversa_data`. No guardar bases de datos, contraseñas, tokens ni respaldos en GitHub. La cuenta de la app se administra desde la VM; recuperar activos de Meta y obtener permisos de su API son procesos distintos.
+Las páginas públicas de [privacidad](dist/privacidad/index.html), [condiciones](dist/terminos/index.html) y [eliminación de datos](dist/eliminar-datos/index.html) no requieren sesión. No guardar bases, llaves, tokens, contraseñas ni respaldos en GitHub.

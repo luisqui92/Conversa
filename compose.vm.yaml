@@ -2,15 +2,20 @@ name: conversa-demo
 
 services:
   api:
+    image: conversa-demo-api
     build:
       context: .
       dockerfile: backend/Dockerfile
     restart: unless-stopped
+    stop_grace_period: 60s
     environment:
       APP_ORIGIN: https://cc.chatgo.ia.bo
       DATABASE_PATH: /data/conversa.sqlite
+      MASTER_KEY_PATH: /run/conversa-keys/master.key
+      CHANNEL_ACCOUNTS: "1"
     volumes:
       - conversa_data:/data
+      - conversa_keys:/run/conversa-keys:ro
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -24,6 +29,19 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+  init:
+    image: conversa-demo-api
+    profiles: [maintenance]
+    user: root
+    command: [node, backend/initialize.mjs]
+    environment:
+      DATABASE_PATH: /data/conversa.sqlite
+      MASTER_KEY_PATH: /run/conversa-keys/master.key
+      INSTAGRAM_APP_ID: ${INSTAGRAM_APP_ID:-1797199674816532}
+    volumes:
+      - conversa_data:/data
+      - conversa_keys:/run/conversa-keys
+    network_mode: none
   web:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -50,3 +68,4 @@ volumes:
   caddy_data:
   caddy_config:
   conversa_data:
+  conversa_keys:

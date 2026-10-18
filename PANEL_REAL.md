@@ -1,3 +1,5 @@
+> Referencia del piloto anterior. Para la versión multicliente, usa [la guía de operación actual](docs/operacion/multicliente.md).
+
 # Panel de operaciones de Conversa
 
 El inicio de sesión abre `/#dashboard`. Usa las conexiones y reglas ya guardadas en el volumen de la VM: no hace falta volver a introducir los tokens para instalar este panel.

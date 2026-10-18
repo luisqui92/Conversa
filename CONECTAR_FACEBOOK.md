@@ -1,3 +1,5 @@
+> Referencia del piloto anterior. Para la versión multicliente, usa [la guía de operación actual](docs/operacion/multicliente.md).
+
 # Piloto de Facebook y Messenger
 
 Se conecta una página de Facebook a un usuario de Conversa, con credenciales, eventos y reglas separados de Instagram. La primera página elegida por el usuario es **LUKMI SRL Innovación y Tecnología**, ID **309667913276491**. La consulta de páginas autorizadas mostró MODERATE, MESSAGING y MANAGE, entre otras tareas; eso permite avanzar a la prueba, pero no acredita todos los permisos efectivos ni la aprobación para clientes externos.

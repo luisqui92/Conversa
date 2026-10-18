@@ -12,3 +12,7 @@ backups
 node_modules
 __pycache__
 prospectos-bolivia.csv
+
+*.enc
+migration-backups/
+AVANCE_CONVERSA.md

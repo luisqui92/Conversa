@@ -1,193 +1,393 @@
-import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
-import { installNotifications } from './notifications.mjs';
+import { openDatabase } from './database.mjs';
+import { installAutomation } from './automation-schema.mjs';
 
-export const automationRuleVersion = rule => rule ? createHash('sha256').update(JSON.stringify([
-  rule.account_id, rule.media_id, rule.public_text, rule.dm_text, rule.enabled, rule.enabled_at
-])).digest('hex') : null;
+const numericId = (value) => typeof value === 'string' && /^\d{5,30}$/.test(value);
+const visibleText = (value, limit) =>
+  typeof value === 'string' &&
+  value.trim().length > 0 &&
+  value.length <= limit &&
+  !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value);
+const normalize = (value) =>
+  String(value)
+    .normalize('NFKD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+export const automationRuleVersion = (rule) =>
+  rule
+    ? createHash('sha256')
+        .update(
+          JSON.stringify([
+            rule.account_id,
+            rule.media_id,
+            rule.public_text,
+            rule.dm_text,
+            rule.enabled,
+            rule.enabled_at,
+            rule.keywords || '[]',
+            rule.cooldown_seconds ?? 0,
+          ]),
+        )
+        .digest('hex')
+    : null;
 
-const numericId = value => typeof value === 'string' && /^\d{5,30}$/.test(value);
-const visibleText = (value, limit) => typeof value === 'string' && value.trim().length > 0 && value.length <= limit && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value);
-
-// Uses the existing private database and user ownership; no credentials in these tables.
-export function openCommentAutomation(path, { now = Date.now, channel = 'instagram', renderPublicText = text => text } = {}) {
+export function openCommentAutomation(
+  path,
+  { now = Date.now, channel = 'instagram', renderPublicText = (text) => text } = {},
+) {
   if (!['instagram', 'facebook'].includes(channel)) throw new Error('Canal no válido.');
-  const objectId = channel === 'facebook'
-    ? value => typeof value === 'string' && /^\d{5,30}(?:_\d{5,30}){0,2}$/.test(value)
-    : numericId;
-  const connection = new DatabaseSync(path);
-  // Only these two fixed namespaces are accepted; all row values remain bound parameters.
-  const names = sql => sql.replace(/\bautomation_/g, channel + '_');
-  const db = {
-    exec: sql => connection.exec(names(sql)),
-    prepare: sql => connection.prepare(names(sql)),
-    close: () => connection.close()
-  };
-  db.exec(`PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
-    CREATE TABLE IF NOT EXISTS automation_rules (
-      account_id TEXT NOT NULL, media_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id),
-      public_text TEXT NOT NULL, dm_text TEXT NOT NULL, enabled INTEGER NOT NULL,
-      enabled_at INTEGER NOT NULL, PRIMARY KEY(account_id,media_id));
-    CREATE TABLE IF NOT EXISTS automation_actions (
-      account_id TEXT NOT NULL, comment_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id),
-      media_id TEXT NOT NULL, rule_enabled_at INTEGER NOT NULL, comment_at INTEGER NOT NULL,
-      public_text TEXT NOT NULL, dm_text TEXT NOT NULL, status TEXT NOT NULL,
-      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
-      public_id TEXT, message_id TEXT, last_error TEXT,
-      PRIMARY KEY(account_id,comment_id));
-    CREATE INDEX IF NOT EXISTS automation_actions_status ON automation_actions(status,created_at);
-    CREATE INDEX IF NOT EXISTS automation_actions_owner ON automation_actions(user_id,created_at);`);
-  installNotifications(connection);
-  // The notification and status transition commit together, including crash recovery.
-  // No backfill: installing the panel does not notify old completed actions.
-  db.exec(`CREATE TRIGGER IF NOT EXISTS automation_notify_result
-    AFTER UPDATE OF status ON automation_actions
-    WHEN OLD.status<>NEW.status AND (
-      (NEW.status='sent' AND NEW.public_id IS NOT NULL AND NEW.message_id IS NOT NULL)
-      OR NEW.status IN ('public_failed','dm_failed','public_unknown','dm_unknown'))
-    BEGIN
-      INSERT OR IGNORE INTO notifications
-        (event_key,user_id,channel,account_id,comment_id,media_id,status,created_at)
-      VALUES ('${channel}:'||NEW.account_id||':'||NEW.comment_id||':'||NEW.status,
-        NEW.user_id,'${channel}',NEW.account_id,NEW.comment_id,NEW.media_id,NEW.status,NEW.updated_at);
-    END;`);
-  function rule(config, mediaId) {
-    return db.prepare('SELECT * FROM automation_rules WHERE account_id=? AND media_id=? AND user_id=?').get(config.accountId, mediaId, config.ownerId);
-  }
-  return {
-    enable(config, mediaId, publicText, dmText) {
-      if (!numericId(config.accountId) || !objectId(mediaId) || !visibleText(publicText, 1000) || !visibleText(dmText, 1000)) throw new Error('Usa IDs válidos y textos de 1 a 1000 caracteres.');
-      const previous = rule(config, mediaId);
-      // A repeated installation command does not reset the activation cut-off.
-      if (previous?.enabled && previous.public_text === publicText && previous.dm_text === dmText) return;
+  const connection = openDatabase(path),
+    db = connection.db;
+  installAutomation(db);
+  const objectId =
+    channel === 'facebook'
+      ? (value) => typeof value === 'string' && /^\d{5,30}(?:_\d{5,30}){0,2}$/.test(value)
+      : numericId;
+  const rule = (config, mediaId) =>
+    db
+      .prepare(
+        'SELECT * FROM channel_rules WHERE channel=? AND account_id=? AND media_id=? AND user_id=?',
+      )
+      .get(channel, config.accountId, mediaId, config.ownerId);
+  const ruleFields =
+    'account_id,media_id,public_text,dm_text,enabled,enabled_at,keywords,cooldown_seconds';
+  const actionFields =
+    'account_id,comment_id,media_id,status,created_at,updated_at,public_id,message_id,last_error,public_text,dm_text,author_id';
+  const api = {
+    enable(config, mediaId, publicText, dmText, options = {}) {
+      if (
+        !numericId(config.accountId) ||
+        !objectId(mediaId) ||
+        !visibleText(publicText, 1000) ||
+        !visibleText(dmText, 1000)
+      )
+        throw new Error('Usa IDs válidos y textos de 1 a 1000 caracteres.');
+      const previous = rule(config, mediaId),
+        keywords = JSON.stringify(
+          options.keywords ?? (previous ? JSON.parse(previous.keywords) : []),
+        );
+      // Legacy low-level CLI calls preserve their previous policy. Web-created rules default to 24 hours.
+      const cooldown = options.cooldownSeconds ?? previous?.cooldown_seconds ?? 0;
+      if (
+        previous?.enabled &&
+        previous.public_text === publicText &&
+        previous.dm_text === dmText &&
+        previous.keywords === keywords &&
+        previous.cooldown_seconds === cooldown
+      )
+        return;
       const enabledAt = Math.max(now(), (previous?.enabled_at || 0) + 1);
-      db.prepare(`INSERT INTO automation_rules VALUES (?,?,?,?,?,1,?) ON CONFLICT(account_id,media_id) DO UPDATE SET
-        user_id=excluded.user_id, public_text=excluded.public_text,dm_text=excluded.dm_text,enabled=1,enabled_at=excluded.enabled_at`)
-        .run(config.accountId, mediaId, config.ownerId, publicText, dmText, enabledAt);
+      db.prepare(
+        `INSERT INTO channel_rules VALUES (?,?,?,?,?,?,1,?,?,?) ON CONFLICT(channel,account_id,media_id) DO UPDATE SET
+        public_text=excluded.public_text,dm_text=excluded.dm_text,enabled=1,enabled_at=excluded.enabled_at,keywords=excluded.keywords,cooldown_seconds=excluded.cooldown_seconds
+        WHERE channel_rules.user_id=excluded.user_id`,
+      ).run(
+        channel,
+        config.accountId,
+        mediaId,
+        config.ownerId,
+        publicText,
+        dmText,
+        enabledAt,
+        keywords,
+        cooldown,
+      );
     },
     disable(config, mediaId) {
-      return db.prepare('UPDATE automation_rules SET enabled=0 WHERE account_id=? AND media_id=? AND user_id=?').run(config.accountId, mediaId, config.ownerId).changes;
+      return db
+        .prepare(
+          'UPDATE channel_rules SET enabled=0 WHERE channel=? AND account_id=? AND media_id=? AND user_id=?',
+        )
+        .run(channel, config.accountId, mediaId, config.ownerId).changes;
     },
     saveRule(config, input) {
-      const invalid = message => Object.assign(new Error(message), { status: 422 });
-      if (!input || typeof input !== 'object' || !objectId(input.mediaId) ||
-          !visibleText(input.publicText, 1000) || !visibleText(input.dmText, 1000) ||
-          typeof input.enabled !== 'boolean' || !(input.expectedVersion === null ||
-          (typeof input.expectedVersion === 'string' && /^[a-f0-9]{64}$/.test(input.expectedVersion)))) {
+      const invalid = (message) => Object.assign(new Error(message), { status: 422 });
+      if (
+        !input ||
+        !objectId(input.mediaId) ||
+        !visibleText(input.publicText, 1000) ||
+        !visibleText(input.dmText, 1000) ||
+        typeof input.enabled !== 'boolean' ||
+        !(
+          input.expectedVersion === null ||
+          (typeof input.expectedVersion === 'string' &&
+            /^[a-f0-9]{64}$/.test(input.expectedVersion))
+        )
+      )
         throw invalid('Revisa el ID de publicación y los dos mensajes (de 1 a 1000 caracteres).');
-      }
-      if (channel === 'facebook' && input.mediaId.includes('_') && input.mediaId.split('_')[0] !== config.accountId) {
+      if (
+        channel === 'facebook' &&
+        input.mediaId.includes('_') &&
+        input.mediaId.split('_')[0] !== config.accountId
+      )
         throw invalid('El ID de publicación debe corresponder a la página conectada.');
-      }
+      const keywords = input.keywords ?? [],
+        cooldown = input.cooldownSeconds ?? 86400;
+      if (
+        !Array.isArray(keywords) ||
+        keywords.length > 20 ||
+        keywords.some((k) => !visibleText(k, 60)) ||
+        !Number.isInteger(cooldown) ||
+        cooldown < 0 ||
+        cooldown > 30 * 86400
+      )
+        throw invalid('Usa hasta 20 palabras clave y un intervalo de 0 a 30 días.');
       db.exec('BEGIN IMMEDIATE');
       try {
         const previous = rule(config, input.mediaId);
-        if (automationRuleVersion(previous) !== input.expectedVersion) {
-          throw Object.assign(new Error('Esta automatización cambió en otra pestaña. Actualiza y vuelve a abrirla.'), { status: 409 });
-        }
-        if (!previous && !input.enabled) throw invalid('Crea primero la automatización antes de pausarla.');
-        this.enable(config, input.mediaId, input.publicText, input.dmText);
-        if (!input.enabled) this.disable(config, input.mediaId);
+        if (automationRuleVersion(previous) !== input.expectedVersion)
+          throw Object.assign(
+            new Error('Esta automatización cambió en otra pestaña. Actualiza y vuelve a abrirla.'),
+            { status: 409 },
+          );
+        if (!previous && !input.enabled)
+          throw invalid('Crea primero la automatización antes de pausarla.');
+        api.enable(config, input.mediaId, input.publicText, input.dmText, {
+          keywords,
+          cooldownSeconds: cooldown,
+        });
+        if (!input.enabled) api.disable(config, input.mediaId);
         db.exec('COMMIT');
         const saved = rule(config, input.mediaId);
         return { ...saved, user_id: undefined, version: automationRuleVersion(saved) };
-      } catch (error) { db.exec('ROLLBACK'); throw error; }
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
     },
     notificationAction(userId, accountId, commentId) {
-      return db.prepare(`SELECT account_id,comment_id,media_id,status,created_at,updated_at,
-        public_id,message_id,last_error,public_text,dm_text FROM automation_actions
-        WHERE user_id=? AND account_id=? AND comment_id=?`).get(userId, accountId, commentId) || null;
+      return (
+        db
+          .prepare(
+            `SELECT ${actionFields} FROM channel_actions WHERE channel=? AND user_id=? AND account_id=? AND comment_id=?`,
+          )
+          .get(channel, userId, accountId, commentId) || null
+      );
     },
-    panelReport(userId, accountId) {
-      const periodStart = now() - 7 * 86400_000;
-      const rules = db.prepare(`SELECT account_id,media_id,public_text,dm_text,enabled,enabled_at
-        FROM automation_rules WHERE user_id=? AND account_id=? ORDER BY enabled_at DESC`).all(userId, accountId)
-        .map(rule => ({ ...rule, version: automationRuleVersion(rule) }));
-      const actions = db.prepare(`SELECT account_id,comment_id,media_id,status,created_at,updated_at,
-        public_id,message_id,last_error,public_text,dm_text FROM automation_actions
-        WHERE user_id=? AND account_id=? AND created_at>=? ORDER BY created_at DESC,rowid DESC LIMIT 20`).all(userId, accountId, periodStart);
-      const summary = db.prepare(`SELECT count(*) AS total,
-        count(public_id) AS publicConfirmed, count(message_id) AS dmConfirmed,
+    panelReport(userId, accountId, { days = 7 } = {}) {
+      if (![7, 30, 90].includes(days)) days = 7;
+      const periodStart = now() - days * 86400_000;
+      const rules = db
+        .prepare(
+          `SELECT ${ruleFields} FROM channel_rules WHERE channel=? AND user_id=? AND account_id=? ORDER BY enabled_at DESC`,
+        )
+        .all(channel, userId, accountId)
+        .map((r) => ({ ...r, version: automationRuleVersion(r) }));
+      const actions = db
+        .prepare(
+          `SELECT ${actionFields} FROM channel_actions WHERE channel=? AND user_id=? AND account_id=? AND created_at>=? ORDER BY created_at DESC,rowid DESC LIMIT 50`,
+        )
+        .all(channel, userId, accountId, periodStart);
+      const summary = db
+        .prepare(
+          `SELECT count(*) AS total,count(public_id) AS publicConfirmed,count(message_id) AS dmConfirmed,
         coalesce(sum(status IN ('pending','public_sending','public_done','dm_sending')),0) AS pending,
-        coalesce(sum(status IN ('public_failed','dm_failed','public_unknown','dm_unknown')),0) AS attention
-        FROM automation_actions WHERE user_id=? AND account_id=? AND created_at>=?`).get(userId, accountId, periodStart);
-      return { rules, actions, summary, periodStart };
+        coalesce(sum(status IN ('public_failed','dm_failed','public_unknown','dm_unknown','skipped_rate_limit','skipped_late','skipped_author')),0) AS attention,
+        coalesce(sum(status LIKE 'skipped_%'),0) AS skipped FROM channel_actions WHERE channel=? AND user_id=? AND account_id=? AND created_at>=?`,
+        )
+        .get(channel, userId, accountId, periodStart);
+      return { rules, actions, summary, periodStart, days };
     },
     enqueue(config, entries) {
       let added = 0;
       db.exec('BEGIN IMMEDIATE');
       try {
-        // Old actions are not replayable: incoming events must also pass freshness and activation checks.
-        db.prepare('DELETE FROM automation_actions WHERE updated_at<?').run(now() - 7 * 86400_000);
+        db.prepare('DELETE FROM channel_actions WHERE updated_at<?').run(now() - 90 * 86400_000);
         for (const entry of entries) {
           if (String(entry.id) !== config.accountId || !Number.isFinite(entry.time)) continue;
           const time = entry.time * 1000;
-          if (time < now() - 10 * 60_000 || time > now() + 60_000) continue;
           for (const change of Array.isArray(entry.changes) ? entry.changes : []) {
             const value = change?.value;
-            if (change?.field !== 'comments' || !value || !objectId(value.id) || !objectId(value.media?.id)) continue;
-            if (value.parent_id || value.media.media_product_type === 'LIVE' || !value.from?.id) continue;
-            if (String(value.from.id) === config.accountId || (typeof value.from.username === 'string' && value.from.username.toLowerCase() === config.username.toLowerCase())) continue;
+            if (
+              change?.field !== 'comments' ||
+              !value ||
+              !objectId(value.id) ||
+              !objectId(value.media?.id)
+            )
+              continue;
+            if (
+              value.parent_id ||
+              value.media.media_product_type === 'LIVE' ||
+              String(value.from?.id) === config.accountId ||
+              (typeof value.from?.username === 'string' &&
+                value.from.username.toLowerCase() === config.username.toLowerCase())
+            )
+              continue;
             const active = rule(config, value.media.id);
             if (!active?.enabled || time < Math.floor(active.enabled_at / 1000) * 1000) continue;
-            // Freeze the per-comment reply before enqueueing; later phases never
-            // look up another author's identity or change an existing message.
-            const publicText = renderPublicText(active.public_text, value);
-            if (!visibleText(publicText, 1000)) continue;
-            // Pilot limit: at most 30 new comment workflows per account per hour.
-            if (db.prepare('SELECT count(*) AS n FROM automation_actions WHERE account_id=? AND created_at>?').get(config.accountId, now() - 3600_000).n >= 30) continue;
-            const result = db.prepare(`INSERT OR IGNORE INTO automation_actions
-              (account_id,comment_id,user_id,media_id,rule_enabled_at,comment_at,public_text,dm_text,status,created_at,updated_at)
-              VALUES (?,?,?,?,?,?,?,?,'pending',?,?)`).run(config.accountId, value.id, config.ownerId, value.media.id, active.enabled_at, time, publicText, active.dm_text, now(), now());
-            added += result.changes;
+            if (
+              db
+                .prepare(
+                  'SELECT 1 FROM channel_actions WHERE channel=? AND account_id=? AND comment_id=?',
+                )
+                .get(channel, config.accountId, value.id)
+            )
+              continue;
+            let status = 'pending',
+              reason = null;
+            const author = String(value.from?.id || ''),
+              publicText = renderPublicText(active.public_text, value);
+            if (!numericId(author) || !visibleText(publicText, 1000)) {
+              status = 'skipped_author';
+              reason = 'No se pudo identificar con seguridad al autor o generar la respuesta.';
+            } else if (time < now() - 10 * 60_000 || time > now() + 60_000) {
+              status = 'skipped_late';
+              reason = 'El evento llegó fuera de la ventana segura de procesamiento.';
+            } else if (
+              JSON.parse(active.keywords).length &&
+              !JSON.parse(active.keywords).some((k) =>
+                normalize(value.text || '').includes(normalize(k)),
+              )
+            ) {
+              status = 'skipped_keyword';
+              reason = 'El comentario no coincide con las palabras clave.';
+            } else if (
+              active.cooldown_seconds > 0 &&
+              db
+                .prepare(
+                  `SELECT 1 FROM channel_actions WHERE channel=? AND account_id=? AND media_id=? AND author_id=? AND created_at>?
+              AND status NOT LIKE 'skipped_%' AND status NOT IN ('cancelled','expired') LIMIT 1`,
+                )
+                .get(
+                  channel,
+                  config.accountId,
+                  value.media.id,
+                  author,
+                  now() - active.cooldown_seconds * 1000,
+                )
+            ) {
+              status = 'skipped_person';
+              reason =
+                'Esta persona ya tiene un flujo para esta publicación dentro del intervalo configurado.';
+            } else if (
+              db
+                .prepare(
+                  `SELECT count(*) AS n FROM channel_actions WHERE channel=? AND account_id=? AND created_at>? AND status NOT LIKE 'skipped_%'`,
+                )
+                .get(channel, config.accountId, now() - 3600_000).n >= 30
+            ) {
+              status = 'skipped_rate_limit';
+              reason =
+                'Se alcanzó el límite de 30 flujos por hora de esta cuenta. Requiere atención; no se reenvía automáticamente.';
+            }
+            db.prepare(
+              `INSERT INTO channel_actions(channel,account_id,comment_id,user_id,media_id,rule_enabled_at,comment_at,public_text,dm_text,status,created_at,updated_at,last_error,author_id)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            ).run(
+              channel,
+              config.accountId,
+              value.id,
+              config.ownerId,
+              value.media.id,
+              active.enabled_at,
+              time,
+              publicText || active.public_text,
+              active.dm_text,
+              status,
+              now(),
+              now(),
+              reason,
+              author || null,
+            );
+            if (status === 'pending') added++;
           }
         }
         db.exec('COMMIT');
-      } catch (error) { db.exec('ROLLBACK'); throw error; }
-      return added;
+        return added;
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
     },
     claim(config) {
       db.exec('BEGIN IMMEDIATE');
       try {
-        db.prepare(`UPDATE automation_actions SET status=CASE status WHEN 'public_sending' THEN 'public_unknown' ELSE 'dm_unknown' END,
+        db.prepare(
+          `UPDATE channel_actions SET status=CASE status WHEN 'public_sending' THEN 'public_unknown' ELSE 'dm_unknown' END,
           last_error='Resultado incierto tras interrupción; revisar la plataforma antes de cualquier reenvío.',updated_at=?
-          WHERE status IN ('public_sending','dm_sending') AND updated_at<?`).run(now(), now() - 60_000);
-        // At most 60 pending phases are scanned; ingestion is limited to 30 comments/hour.
-        const pending = db.prepare(`SELECT * FROM automation_actions WHERE user_id=? AND account_id=? AND status IN ('pending','public_done') ORDER BY created_at,rowid LIMIT 60`).all(config.ownerId, config.accountId);
+          WHERE channel=? AND user_id=? AND account_id=? AND status IN ('public_sending','dm_sending') AND updated_at<?`,
+        ).run(now(), channel, config.ownerId, config.accountId, now() - 60_000);
+        const pending = db
+          .prepare(
+            `SELECT * FROM channel_actions WHERE channel=? AND user_id=? AND account_id=? AND status IN ('pending','public_done') ORDER BY created_at,rowid LIMIT 60`,
+          )
+          .all(channel, config.ownerId, config.accountId);
         let job = null;
         for (const row of pending) {
-          const active = rule(config, row.media_id);
-          const cancelled = !active?.enabled || active.enabled_at !== row.rule_enabled_at;
-          const expired = row.comment_at < now() - 10 * 60_000;
+          const active = rule(config, row.media_id),
+            cancelled = !active?.enabled || active.enabled_at !== row.rule_enabled_at,
+            expired = row.comment_at < now() - 10 * 60_000;
           if (cancelled || expired) {
-            db.prepare('UPDATE automation_actions SET status=?,updated_at=? WHERE account_id=? AND comment_id=?').run(cancelled ? 'cancelled' : 'expired', now(), row.account_id, row.comment_id);
+            db.prepare(
+              'UPDATE channel_actions SET status=?,updated_at=? WHERE channel=? AND account_id=? AND comment_id=? AND user_id=?',
+            ).run(
+              cancelled ? 'cancelled' : 'expired',
+              now(),
+              channel,
+              row.account_id,
+              row.comment_id,
+              config.ownerId,
+            );
             continue;
           }
           const stage = row.status === 'pending' ? 'public_sending' : 'dm_sending';
-          db.prepare('UPDATE automation_actions SET status=?,updated_at=? WHERE account_id=? AND comment_id=?').run(stage, now(), row.account_id, row.comment_id);
-          job = { ...row, status: stage }; break;
+          db.prepare(
+            'UPDATE channel_actions SET status=?,updated_at=? WHERE channel=? AND account_id=? AND comment_id=? AND user_id=?',
+          ).run(stage, now(), channel, row.account_id, row.comment_id, config.ownerId);
+          job = { ...row, status: stage };
+          break;
         }
-        db.exec('COMMIT'); return job;
-      } catch (error) { db.exec('ROLLBACK'); throw error; }
+        db.exec('COMMIT');
+        return job;
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
     },
     complete(job, providerId) {
-      const column = job.status === 'public_sending' ? 'public_id' : 'message_id';
-      const status = job.status === 'public_sending' ? 'public_done' : 'sent';
-      db.prepare(`UPDATE automation_actions SET status=?,${column}=?,last_error=NULL,updated_at=? WHERE account_id=? AND comment_id=? AND status=?`)
-        .run(status, providerId, now(), job.account_id, job.comment_id, job.status);
+      const publicPhase = job.status === 'public_sending';
+      if (publicPhase)
+        db.prepare(
+          `UPDATE channel_actions SET status='public_done',public_id=?,last_error=NULL,updated_at=? WHERE channel=? AND user_id=? AND account_id=? AND comment_id=? AND status='public_sending'`,
+        ).run(providerId, now(), channel, job.user_id, job.account_id, job.comment_id);
+      else
+        db.prepare(
+          `UPDATE channel_actions SET status='sent',message_id=?,last_error=NULL,updated_at=? WHERE channel=? AND user_id=? AND account_id=? AND comment_id=? AND status='dm_sending'`,
+        ).run(providerId, now(), channel, job.user_id, job.account_id, job.comment_id);
     },
     fail(job, uncertain, reason) {
-      const status = (job.status === 'public_sending' ? 'public_' : 'dm_') + (uncertain ? 'unknown' : 'failed');
-      db.prepare('UPDATE automation_actions SET status=?,last_error=?,updated_at=? WHERE account_id=? AND comment_id=? AND status=?')
-        .run(status, reason, now(), job.account_id, job.comment_id, job.status);
+      const status =
+        (job.status === 'public_sending' ? 'public_' : 'dm_') + (uncertain ? 'unknown' : 'failed');
+      db.prepare(
+        'UPDATE channel_actions SET status=?,last_error=?,updated_at=? WHERE channel=? AND user_id=? AND account_id=? AND comment_id=? AND status=?',
+      ).run(
+        status,
+        reason,
+        now(),
+        channel,
+        job.user_id,
+        job.account_id,
+        job.comment_id,
+        job.status,
+      );
     },
     report(userId) {
       return {
-        rules: db.prepare('SELECT account_id,media_id,public_text,dm_text,enabled,enabled_at FROM automation_rules WHERE user_id=? ORDER BY enabled_at DESC').all(userId),
-        actions: db.prepare('SELECT account_id,comment_id,media_id,status,created_at,updated_at,public_id,message_id,last_error FROM automation_actions WHERE user_id=? ORDER BY created_at DESC,rowid DESC LIMIT 20').all(userId)
+        rules: db
+          .prepare(
+            `SELECT ${ruleFields} FROM channel_rules WHERE channel=? AND user_id=? ORDER BY enabled_at DESC`,
+          )
+          .all(channel, userId),
+        actions: db
+          .prepare(
+            `SELECT ${actionFields} FROM channel_actions WHERE channel=? AND user_id=? ORDER BY created_at DESC,rowid DESC LIMIT 20`,
+          )
+          .all(channel, userId),
       };
     },
-    close() { db.close(); }
+    close() {
+      connection.release();
+    },
   };
+  return api;
 }
-

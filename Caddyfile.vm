@@ -1,21 +1,27 @@
 cc.chatgo.ia.bo {
-    handle /api/* {
-        reverse_proxy api:8080
-    }
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	handle /api/* {
+		reverse_proxy api:8080
+	}
 
-    handle {
-    root * /srv
-    encode zstd gzip
+	handle {
+		root * /srv
+		encode zstd gzip
 
-    header {
-        X-Content-Type-Options nosniff
-        Referrer-Policy strict-origin-when-cross-origin
-        Cache-Control no-cache
-    }
+		header {
+			X-Content-Type-Options nosniff
+			Referrer-Policy strict-origin-when-cross-origin
+			Cache-Control no-cache
+		}
 
-    @modules path *.mjs
-    header @modules Content-Type "text/javascript; charset=utf-8"
+		@modules path *.mjs
+		header @modules Content-Type "text/javascript; charset=utf-8"
 
-    file_server
-    }
+		file_server
+	}
 }

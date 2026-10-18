@@ -1,3 +1,5 @@
+> Referencia del piloto anterior. Para la versión multicliente, usa [la guía de operación actual](docs/operacion/multicliente.md).
+
 # Instagram: primera conexión y recepción de eventos
 
 Esta guía describe la etapa de recepción. Después de comprobarla, el piloto de respuestas públicas y DM se activa por separado siguiendo [AUTOMATIZAR_INSTAGRAM.md](AUTOMATIZAR_INSTAGRAM.md). Los apartados que dicen recepción solamente describen la conexión antes de activar reglas.
