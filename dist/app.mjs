@@ -117,7 +117,13 @@ const livePanel = createLivePanel({
 if (account.mode === 'server')
   startPanelNotifications({ toast, onOpen: (activity) => livePanel.openActivity(activity) });
 document.querySelector('[data-page="customers"]').hidden = !account.user?.admin;
-if (account.user) document.getElementById('live-owner').textContent = account.user.email;
+if (account.user) {
+  document.getElementById('live-owner').textContent = account.user.email;
+  document.querySelector('.profile small').textContent = account.user.email;
+  document
+    .querySelectorAll('.avatar.owner')
+    .forEach((avatar) => (avatar.textContent = account.user.email.slice(0, 1).toUpperCase()));
+}
 if (account.mode === 'local') document.querySelector('.brand').href = '#inbox';
 function workspace() {
   return data.workspaces[data.current];
@@ -818,7 +824,7 @@ document.addEventListener('click', (event) => {
   if (b.id === 'help' && LIVE_PAGES[page]) {
     openDialog(
       'Tu centro de operaciones',
-      '<p class="dialog-copy">Resumen reúne tus canales y métricas de los últimos 7 días. En Actividad puedes revisar comentarios, mensajes y el resultado de cada envío. Automatizaciones permite editar mensajes y activar o pausar publicaciones. Canales muestra las cuentas y el estado guardado de su autorización.</p>',
+      '<p class="dialog-copy">Publicaciones reúne tus posts, las personas que comentaron y el resultado de cada envío. En Conversaciones puedes revisar comentarios y mensajes entrantes. Automatizaciones permite editar mensajes y activar o pausar publicaciones. Canales muestra las cuentas y el estado guardado de su autorización.</p>',
     );
     return;
   }
@@ -845,8 +851,8 @@ document.addEventListener('click', (event) => {
   }
   if (b.id === 'profile')
     openDialog(
-      'Conversa · Lukmi SRL',
-      `<p class="dialog-copy">${account.mode === 'server' ? 'Acceso autenticado. Las campañas y prospectos se guardan en el servidor, separados por usuario. Los ejemplos siguen siendo ficticios.' : 'Demo autónoma con guardado en este navegador.'}<br><br>Las conexiones reales de Instagram y Facebook se consultan y gestionan desde el centro de operaciones. Esta sección de demo conserva datos ficticios. Todavía no utiliza un modelo de IA ni cobra suscripciones. Los equipos con varios usuarios compartiendo una empresa siguen pendientes.</p>`,
+      'Mi cuenta de Conversa',
+      `<p class="dialog-copy">${account.mode === 'server' ? 'Sesión de ' + esc(account.user.email) + '. Tus conexiones y conversaciones pertenecen a tu negocio.' : 'Demo con datos de ejemplo guardados en este navegador.'}</p><p class="dialog-copy">En Publicaciones puedes preparar tus respuestas. En Canales puedes revisar la autorización de tus cuentas de Meta.</p>`,
     );
 });
 form.addEventListener('submit', (event) => {

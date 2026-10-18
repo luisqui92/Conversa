@@ -7,20 +7,26 @@
       name="description"
       content="Conversa de Lukmi SRL: tus canales, automatizaciones y actividad de Instagram y Facebook en un solo lugar."
     />
-    <title>Conversa · Tu centro de operaciones</title>
+    <title>Conversa · Tus publicaciones</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="campaigns.css" />
     <link rel="stylesheet" href="session.css" />
     <link rel="stylesheet" href="live-panel.css" />
+    <link rel="stylesheet" href="workspace.css" />
   </head>
   <body>
     <aside class="sidebar">
       <a class="brand" href="#dashboard"
-        ><img
-          class="brand-image"
-          src="/assets/conversa-logo-transparente.png"
-          alt=""
-        />conversa<span class="brand-dot">.</span></a
+        ><svg class="brand-image" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <path
+            d="M33 19a14 14 0 0 1-14 14H8l-4 4V19a15 15 0 1 1 29 0Z"
+            stroke="currentColor"
+            stroke-width="2.5"
+          />
+          <circle cx="12" cy="19" r="1.6" fill="currentColor" />
+          <circle cx="20" cy="19" r="1.6" fill="currentColor" />
+          <circle cx="28" cy="19" r="1.6" fill="currentColor" /></svg
+        >conversa<span class="brand-dot">.</span></a
       >
       <div class="live-account-context">
         <span>C</span>
@@ -34,10 +40,10 @@
           <option value="casa">Casa Andina</option>
         </select>
       </div>
-      <div class="nav-label">CENTRO DE OPERACIONES</div>
+      <div class="nav-label">TU ESPACIO DE TRABAJO</div>
       <nav aria-label="Principal">
-        <button data-page="dashboard"><span data-icon="layers"></span>Resumen</button>
-        <button data-page="activity"><span data-icon="inbox"></span>Actividad</button>
+        <button data-page="dashboard"><span data-icon="layers"></span>Publicaciones</button>
+        <button data-page="activity"><span data-icon="message"></span>Conversaciones</button>
         <button data-page="automations"><span data-icon="spark"></span>Automatizaciones</button>
         <button data-page="connections"><span data-icon="link"></span>Canales</button>
         <button data-page="customers" hidden><span data-icon="message"></span>Clientes</button>
@@ -58,15 +64,14 @@
       </details>
       <div class="sidebar-bottom">
         <div class="live-sidebar-note">
-          <strong><span class="green-dot"></span>Cada interacción cuenta.</strong>
-          <p>Elige tu publicación. Personaliza tus mensajes. Acércate a tu comunidad.</p>
-          <button data-page="automations">
-            Tus automatizaciones <span data-icon="arrow"></span>
-          </button>
+          <strong><span class="green-dot"></span>Tu negocio, conectado.</strong>
+          <p>Revisa tus cuentas y continúa las conversaciones que lo necesitan.</p>
+          <button data-page="connections">Ver mis canales <span data-icon="arrow"></span></button>
         </div>
         <button class="profile" id="profile">
           <span class="avatar owner">L</span
-          ><span>Lukmi SRL<small>Mi cuenta de Conversa</small></span
+          ><span
+            ><strong data-profile-name>Mi negocio</strong><small>Mi cuenta de Conversa</small></span
           ><span>⌄</span>
         </button>
       </div>
@@ -85,8 +90,8 @@
         </div>
       </header>
       <main id="main"></main>
-      <footer>
-        Conversa · Lukmi SRL © 2026
+      <footer class="workspace-footer">
+        <span class="powered-by">powered by <strong>ChatGo</strong></span>
         <span
           ><a href="/privacidad/">Privacidad</a> · <a href="/terminos/">Condiciones</a> ·
           <a href="/eliminar-datos/">Eliminar datos</a></span

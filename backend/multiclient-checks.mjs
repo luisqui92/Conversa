@@ -79,7 +79,19 @@ test('Varios clientes y cuentas del mismo canal: cifrado, propiedad y webhooks',
     appSecret: 'different-app-secret',
     verifyToken: 'verify-extra',
   });
-  const server = makeServer({ store, registry, automation: ig, facebookAutomation: fb });
+  let publicationReads = 0;
+  const server = makeServer({
+    store,
+    registry,
+    automation: ig,
+    facebookAutomation: fb,
+    publications: {
+      get: async (config) => {
+        publicationReads++;
+        return { posts: [{ id: '17911111111111111', title: config.username }] };
+      },
+    },
+  });
   const a = store.login(one.email, 'customer-one-password', 'test'),
     b = store.login(two.email, 'customer-two-password', 'test');
   const headers = (session) => ({
@@ -111,6 +123,20 @@ test('Varios clientes y cuentas del mismo canal: cifrado, propiedad y webhooks',
         );
         assert.equal((await get('/api/integrations/instagram')).status, 409);
         assert.equal((await http(server, 'GET', '/api/channel-accounts')).status, 401);
+        assert.equal(
+          (await get('/api/channel-accounts/' + first.id + '/publications')).body.posts[0].title,
+          'client_one',
+        );
+        assert.equal(publicationReads, 1);
+        assert.equal(
+          (await get('/api/channel-accounts/' + first.id + '/publications', b)).status,
+          404,
+        );
+        assert.equal(
+          (await http(server, 'GET', '/api/channel-accounts/' + first.id + '/publications')).status,
+          401,
+        );
+        assert.equal(publicationReads, 1);
       },
     );
     await t.test(

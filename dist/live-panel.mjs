@@ -1,9 +1,17 @@
+import {
+  buildPublications,
+  publicationCard,
+  conversationDetail,
+  networkMark,
+  initials,
+  needsAttention,
+} from './publications.mjs';
 const liveIcon = (name) =>
   `<svg class="live-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${name === 'reply' ? '<path d="m9 5-6 6 6 6M3 11h11a6 6 0 0 1 6 6"/>' : name === 'refresh' ? '<path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1"/>' : '<path d="M6 18 18 6M6 6h12v12"/>'}</svg>`;
 const NETWORKS = { instagram: 'Instagram', facebook: 'Facebook' };
 export const LIVE_PAGES = {
-  dashboard: 'Resumen',
-  activity: 'Actividad',
+  dashboard: 'Publicaciones',
+  activity: 'Conversaciones',
   automations: 'Automatizaciones',
   connections: 'Canales',
   customers: 'Clientes',
@@ -95,7 +103,9 @@ export function buildLiveActivity(channels) {
           accountName: data.account.username,
           kind: 'comment',
           comment_id: String(id),
-          media_id: String(channel === 'facebook' ? v.post_id || '' : v.media?.id || ''),
+          media_id: String(
+            channel === 'facebook' ? v.post_id || v.post?.id || '' : v.media?.id || '',
+          ),
           author: v.from?.name || v.from?.username || 'Perfil de la comunidad',
           authorId,
           text: String(channel === 'facebook' ? v.message || '' : v.text || ''),
@@ -139,9 +149,15 @@ export function buildLiveActivity(channels) {
         accountName: data.account.username,
         kind: 'comment',
         author: source?.author || 'Comentario de la comunidad',
-        authorId: source?.authorId || '',
+        authorId: source?.authorId || action.author_id || '',
         text: source?.text || '',
       });
+    }
+    for (const message of messages.values()) {
+      const person = [...comments.values()].find(
+        (comment) => comment.authorId && comment.authorId === message.authorId,
+      );
+      if (person) message.author = person.author;
     }
     all.push(...comments.values(), ...messages.values());
   }
@@ -167,7 +183,13 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
     facebookPages = [],
     customers = [],
     operationStatus = null,
-    customerModal;
+    customerModal,
+    postTab = 'active',
+    postQuery = '',
+    postChannel = 'all',
+    selectedPost = null,
+    threadClosed = false;
+  const metadataLoading = new Set();
   const accountBase = (key) =>
     channels[key]?.account?.id
       ? '/api/channel-accounts/' + channels[key].account.id
@@ -183,8 +205,6 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
       })),
     );
   const activities = () => buildLiveActivity(channels);
-  const total = (field) =>
-    configured().reduce((sum, [, c]) => sum + (c.report?.summary?.[field] || 0), 0);
   const header = (title, subtitle, buttons = '') =>
     `<div class="live-heading"><div><span class="live-eyebrow">TU CENTRO DE OPERACIONES</span><h1>${title}</h1><p>${subtitle}</p></div><div class="live-heading-actions"><span class="live-sync" role="status">${loading ? 'Actualizando…' : loadedAt ? `Actualizado ${date(loadedAt)}` : 'Conectando…'}</span><button class="btn" data-live="refresh" ${loading ? 'disabled' : ''}>${liveIcon('refresh')} Actualizar</button>${buttons}</div></div>`;
   const empty = (title, copy) =>
@@ -203,80 +223,137 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
       ${data.error ? '<p class="live-error">No se pudo consultar este canal. Los datos anteriores pueden estar desactualizados.</p>' : ''}
       <button class="live-link" data-live="channel" data-channel="${channel}" data-connection="${connectionKey}">Ver actividad <span>${liveIcon('arrow')}</span></button></article>`;
   }
+  const publications = () => buildPublications(channels, activities());
   function overview() {
-    const active = rules().filter((r) => r.enabled).length;
-    return (
-      header(
-        'Cada conversación empieza aquí.',
-        'Instagram y Facebook, conectados con tu negocio.',
-      ) +
-      `<section class="live-hero"><div><span class="live-hero-kicker"><i></i>COMENTARIOS QUE ABREN CONVERSACIONES</span><h2>Tu comunidad pregunta.<br>Conversa da el primer paso.</h2><p>Una respuesta pública y la información correcta por privado.<br>Tú eliges la publicación y el mensaje.</p><button class="live-hero-button" data-live="automations">Gestionar automatizaciones <span>${liveIcon('arrow')}</span></button></div><div class="live-flow-art" aria-label="Comentario, respuesta pública y mensaje privado"><div class="live-art-message"><span class="live-art-avatar">C</span><div><strong>Tu comunidad</strong><span>¡Hola! Quiero más información.</span></div><i>♡</i></div><div class="live-art-connector"></div><div class="live-art-response"><span class="live-art-avatar purple">c</span><div><strong>Tu negocio</strong><span>Te mandé la información por privado.</span><small>Respuesta pública</small></div><b>✓</b></div><div class="live-art-dm"><span>${liveIcon('arrow')}</span><div><strong>La conversación continúa</strong><small>Mensaje privado después de la respuesta</small></div></div><p>Vista ilustrativa del flujo</p></div></section>
-      <div class="live-section-title"><h2>Tu operación, de un vistazo</h2><span>Últimos <select id="live-period" aria-label="Período del resumen">${[7, 30, 90].map((days) => `<option value="${days}" ${days === periodDays ? 'selected' : ''}>${days} días</option>`).join('')}</select> · ${configured().length} cuentas configuradas</span></div>
-      <div class="live-metrics">${[
-        ['Respuestas públicas', total('publicConfirmed'), 'Aceptadas por Meta', liveIcon('reply')],
-        ['Mensajes privados', total('dmConfirmed'), 'Aceptados por Meta', liveIcon('arrow')],
-        ['Requieren atención', total('attention'), 'Errores o resultados sin confirmar', '!'],
-        ['Automatizaciones activas', active, 'En tus publicaciones configuradas', '✧'],
+    const all = publications();
+    const posts = all.filter(
+      (p) =>
+        p.state === postTab &&
+        (postChannel === 'all' || p.channel === postChannel) &&
+        `${p.title} ${p.caption} ${p.accountName} ${p.items.map((a) => a.author + ' ' + a.text).join(' ')}`
+          .toLocaleLowerCase()
+          .includes(postQuery.toLocaleLowerCase()),
+    );
+    const activePost = posts.find((p) => p.key === selectedPost) || posts[0];
+    const active = activePost?.items.find((a) => a.key === selected) || activePost?.items[0];
+    const showThread = activePost && !threadClosed;
+    return `<div class="publications-heading">
+      <div>
+      <span class="post-kicker">TU ESPACIO DE TRABAJO</span>
+      <h1>Tus publicaciones</h1>
+      <p>Cada consulta empieza con una publicación.</p>
+      </div>
+      <button class="btn primary" data-live="new-rule">
+      <span aria-hidden="true">＋</span> Activar publicación</button>
+      </div>
+      <div class="publication-tools">
+      <div class="post-tabs" role="tablist" aria-label="Estado de las publicaciones">${[
+        ['active', 'Activas'],
+        ['paused', 'Pausadas'],
+        ['available', 'Sin activar'],
       ]
         .map(
-          ([label, value, note, symbol], i) =>
-            `<article class="live-metric ${i === 2 && value ? 'alert' : ''}"><span>${label}<i>${symbol}</i></span><strong>${value}</strong><small>${note}</small></article>`,
+          ([id, label]) =>
+            `<button role="tab" id="publication-tab-${id}" aria-controls="publication-results" tabindex="${postTab === id ? 0 : -1}" aria-selected="${postTab === id}" data-live="post-tab" data-tab="${id}">${label}</button>`,
         )
         .join('')}</div>
-      <div class="live-overview-grid"><section><div class="live-section-title"><h2>Tus canales</h2><button class="live-link" data-live="connections">Administrar ${liveIcon('arrow')}</button></div><div class="live-channel-grid">${(configured().length ? configured().map(([key, data]) => channelCard(networkFor(key), data, false, key)) : Object.keys(NETWORKS).map((channel) => channelCard(channel, {}))).join('')}</div></section><section class="live-process-card"><span class="live-eyebrow">ASÍ FUNCIONA</span><h2>Un flujo. Dos respuestas.</h2><ol><li><span>01</span><div><strong>Recibe un comentario</strong><p>En una publicación que hayas activado.</p></div></li><li><span>02</span><div><strong>Responde en público</strong><p>El primer paso de la automatización.</p></div></li><li><span>03</span><div><strong>Envía la información al DM</strong><p>Después de que Meta acepte la respuesta.</p></div></li></ol><small>La aceptación de Meta no confirma lectura ni notificación.</small></section></div>
-      <section class="live-recent"><div class="live-section-title"><h2>Actividad reciente</h2><button class="live-link" data-live="activity">Ver toda la actividad ${liveIcon('arrow')}</button></div>${activityTable(activities().slice(0, 5))}</section>`
-    );
+      <div class="post-filters">
+      <label class="post-search">
+      <span aria-hidden="true">⌕</span>
+      <input type="search" id="post-search" aria-label="Buscar publicaciones" placeholder="Buscar publicación o persona" value="${e(postQuery)}">
+      </label>
+      <select id="post-channel" aria-label="Canal de las publicaciones">
+      <option value="all">Todos los canales</option>${Object.entries(NETWORKS)
+        .map(
+          ([id, label]) =>
+            `<option value="${id}" ${postChannel === id ? 'selected' : ''}>${label}</option>`,
+        )
+        .join('')}</select>
+      <button class="icon-button" data-live="refresh" aria-label="Actualizar publicaciones" ${loading ? 'disabled' : ''}>${liveIcon('refresh')}</button>
+      </div>
+      </div>
+      <div class="publications-workspace ${showThread ? 'with-thread' : ''}">
+      <section class="publication-list" id="publication-results" role="tabpanel" aria-labelledby="publication-tab-${postTab}" aria-label="Publicaciones ${postTab === 'active' ? 'activas' : postTab === 'paused' ? 'pausadas' : 'sin activar'}">${
+        posts.length
+          ? posts.map((p) => publicationCard(p, showThread ? activePost.key : null)).join('')
+          : `<div class="publications-empty">
+      <span aria-hidden="true">${liveIcon('reply')}</span>
+      <h2>${postQuery || postChannel !== 'all' ? 'No encontramos esa publicación.' : postTab === 'paused' ? 'No tienes publicaciones pausadas.' : postTab === 'available' ? 'Trae tus publicaciones a Conversa.' : 'Tu próxima conversación empieza aquí.'}</h2>
+      <p>${postTab === 'paused' ? 'Las publicaciones que pauses aparecerán en este espacio.' : postTab === 'available' ? 'Aquí se muestran las últimas publicaciones accesibles de tus cuentas. También puedes activar una publicación anterior con su ID.' : 'Elige una publicación, prepara la respuesta y deja que Conversa dé el primer paso.'}</p>
+      <button class="btn primary" data-live="${configured().length ? 'new-rule' : 'connections'}">${configured().length ? 'Activar publicación' : 'Conectar un canal'}</button>
+      </div>`
+      }<div class="post-list-foot">
+      <span class="post-sync">${loading ? 'Actualizando…' : loadedAt ? 'Actualizado ' + date(loadedAt) : 'Conectando…'}</span>${Object.values(channels).some((c) => c.publications?.unavailable) ? '<span>Algunas fotos o publicaciones no están disponibles. Tus automatizaciones se conservan.</span>' : ''}<span>Comentarios disponibles: últimos 7 días. Envíos: <select id="live-period" aria-label="Período de los envíos">${[7, 30, 90].map((d) => `<option value="${d}" ${d === periodDays ? 'selected' : ''}>${d} días</option>`).join('')}</select>.</span>
+      </div>
+      </section>${showThread ? `<aside class="conversation-thread" aria-label="Conversación de la publicación">${conversationDetail(active, activePost)}</aside>` : ''}</div>`;
   }
   function activityTable(items) {
     if (!items.length)
       return empty(
-        'Todo empieza con un comentario.',
-        'Aquí aparecerán los comentarios, mensajes y resultados recibidos por tus canales.',
+        'Todavía no hay conversaciones aquí.',
+        'Los comentarios y mensajes de tus canales aparecerán en este espacio.',
       );
-    return `<div class="live-table-wrap"><table class="live-table"><thead><tr><th>Conversación</th><th>Canal</th><th>Resultado</th><th>Recibido</th><th><span class="sr-only">Detalle</span></th></tr></thead><tbody>${items.map((a) => `<tr><td><strong>${e(a.author)}</strong><small>${e(a.text || 'Comentario #' + suffix(a.comment_id).slice(-6))}</small></td><td><span class="live-platform-label">${mark(a.channel)}${NETWORKS[a.channel]}</span></td><td>${badge(labels[a.status] || 'En revisión', tone(a.status))}</td><td class="live-nowrap">${date(a.created_at)}</td><td><button class="live-link" data-live="detail" data-key="${e(a.key)}" aria-label="Ver actividad de ${e(a.author)}">Ver ${liveIcon('arrow')}</button></td></tr>`).join('')}</tbody></table></div>`;
+    return `<div class="conversation-rows">${items
+      .map(
+        (
+          a,
+        ) => `<button class="conversation-row ${selected === a.key ? 'selected' : ''}" data-live="detail" data-key="${e(a.key)}">
+      <span class="person-initials">${e(initials(a.author))}</span>
+      <span class="conversation-row-copy">
+      <strong>${e(a.author)}</strong>
+      <span>${e(a.text || 'Ver resultado del comentario')}</span>
+      <small>${networkMark(a.channel)}${e(a.accountName || NETWORKS[a.channel])} · ${a.kind === 'message' ? 'Mensaje entrante' : 'Comentario'}</small>
+      </span>
+      <span class="conversation-row-meta">
+      <time>${date(a.created_at)}</time>${badge(labels[a.status] || 'En revisión', tone(a.status))}</span>
+      <span aria-hidden="true">↗</span>
+      </button>`,
+      )
+      .join('')}</div>`;
   }
   function filteredActivity() {
     return activities().filter(
       (a) =>
         (channelFilter === 'all' || a.channel === channelFilter) &&
         (resultFilter === 'all' ||
-          (resultFilter === 'attention'
-            ? attentionStates.includes(a.status)
-            : a.status === resultFilter)) &&
+          (resultFilter === 'attention' ? needsAttention(a) : a.status === resultFilter)) &&
         `${a.author} ${a.text} ${a.comment_id || ''} ${a.media_id || ''}`
           .toLocaleLowerCase()
           .includes(query.toLocaleLowerCase()),
     );
   }
   function detail(a) {
-    if (!a)
-      return `<div class="live-detail-placeholder"><span>${liveIcon('arrow')}</span><h3>Abre una conversación</h3><p>Consulta el comentario, la respuesta pública y el resultado del mensaje privado.</p></div>`;
-    const publicText = String(a.public_text || '').replace(
-      /@\[\d+\]/g,
-      a.authorId ? a.author : 'Autor del comentario',
-    );
-    return `<div class="live-detail-head"><span class="live-platform-label">${mark(a.channel)}${NETWORKS[a.channel]}</span>${badge(labels[a.status], tone(a.status))}</div><div class="live-detail-body"><div class="live-person"><span>${e(a.author.slice(0, 2).toUpperCase())}</span><div><h3>${e(a.author)}</h3><small>${date(a.created_at)} · Bolivia</small></div></div>${a.text ? `<p class="live-source-message">${e(a.text)}</p>` : '<p class="live-muted">El texto original no está entre las últimas entradas disponibles.</p>'}
-      ${a.kind === 'comment' ? `<ol class="live-delivery"><li class="${a.public_id ? 'done' : ''}"><span>${a.public_id ? '✓' : '1'}</span><div><strong>Respuesta pública</strong><small>${a.public_id ? 'Aceptada por Meta' : a.status === 'public_failed' ? 'Rechazada por Meta' : 'Sin confirmación de envío'}</small>${publicText ? `<p>${e(publicText)}</p>` : ''}</div></li><li class="${a.message_id ? 'done' : ''}"><span>${a.message_id ? '✓' : '2'}</span><div><strong>Mensaje privado</strong><small>${a.message_id ? 'Aceptado por Meta' : a.status === 'dm_failed' ? 'Rechazado por Meta' : 'Sin confirmación de envío'}</small>${a.dm_text ? `<p>${e(a.dm_text)}</p>` : ''}</div></li></ol>` : '<div class="live-health notice"><strong>Mensaje entrante registrado</strong><p>La respuesta manual desde el panel todavía no está habilitada.</p></div>'}
-      ${a.last_error ? `<div class="live-health notice"><strong>${attentionStates.includes(a.status) ? 'Requiere revisión' : 'Motivo de la omisión'}</strong><p>${e(a.last_error)}</p></div>` : ''}<p class="live-disclaimer">Los estados muestran la confirmación de la API. No confirman entrega en la bandeja principal, lectura o notificación.</p>${a.comment_id ? `<details class="live-identifiers"><summary>Identificadores de la actividad</summary><p>Comentario: ${e(a.comment_id)}</p><p>Publicación: ${e(a.media_id)}</p>${a.public_id ? `<p>Respuesta: ${e(a.public_id)}</p>` : ''}</details>` : ''}</div>`;
+    const post = a
+      ? publications().find((p) => p.connectionKey === a.connectionKey && p.id === a.media_id)
+      : null;
+    const account = a ? channels[a.connectionKey]?.account || {} : {};
+    return conversationDetail(a, post, account);
   }
   function activityPage() {
     const items = filteredActivity(),
-      active =
-        activities().find((a) => a.key === selected) ||
-        (notificationActivity?.key === selected ? notificationActivity : null);
+      active = !threadClosed
+        ? items.find((a) => a.key === selected) ||
+          (notificationActivity?.key === selected ? notificationActivity : null) ||
+          items[0]
+        : null;
     return (
       header(
-        'Tu actividad, en un solo lugar.',
-        'Comentarios, mensajes y resultados de tus conexiones reales.',
+        'Tus conversaciones',
+        'Quién preguntó, qué respondió Conversa y qué necesita tu atención.',
       ) +
-      `<div class="live-filters"><label class="live-search"><span aria-hidden="true">⌕</span><input type="search" id="live-search" aria-label="Buscar actividad" placeholder="Buscar persona, comentario o publicación…" value="${e(query)}"></label><select id="live-channel-filter" aria-label="Filtrar canal"><option value="all">Todos los canales</option>${Object.entries(
-        NETWORKS,
-      )
+      `<div class="live-filters">
+      <label class="live-search">
+      <span aria-hidden="true">⌕</span>
+      <input type="search" id="live-search" aria-label="Buscar actividad" placeholder="Buscar persona, comentario o publicación…" value="${e(query)}">
+      </label>
+      <select id="live-channel-filter" aria-label="Filtrar canal">
+      <option value="all">Todos los canales</option>${Object.entries(NETWORKS)
         .map(
           ([id, label]) =>
             `<option value="${id}" ${id === channelFilter ? 'selected' : ''}>${label}</option>`,
         )
-        .join('')}</select><select id="live-result-filter" aria-label="Filtrar resultado">${[
+        .join('')}</select>
+      <select id="live-result-filter" aria-label="Filtrar resultado">${[
         ['all', 'Todos los resultados'],
         ['sent', 'Respuesta + DM aceptados'],
         ['attention', 'Requieren atención'],
@@ -286,19 +363,29 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
           ([id, label]) =>
             `<option value="${id}" ${resultFilter === id ? 'selected' : ''}>${label}</option>`,
         )
-        .join('')}</select></div>
-      <div class="live-activity-layout"><section class="live-activity-list"><div class="live-list-title"><h2>Conversaciones</h2><span>${items.length} registros disponibles</span></div><div id="live-results">${activityTable(items)}</div></section><aside class="live-detail" aria-label="Detalle de la actividad">${detail(active)}</aside></div><p class="live-disclaimer">Se consultan las últimas 50 entradas y 50 automatizaciones por cuenta. El resumen permite consultar 7, 30 o 90 días de envíos conservados.</p>`
+        .join('')}</select>
+      </div>
+      <div class="live-activity-layout ${threadClosed ? 'thread-closed' : ''}">
+      <section class="live-activity-list">
+      <div class="live-list-title">
+      <h2>Conversaciones</h2>
+      <span>${items.length} registros disponibles</span>
+      </div>
+      <div id="live-results">${activityTable(items)}</div>
+      </section>${!threadClosed ? `<aside class="live-detail conversation-thread" aria-label="Detalle de la actividad">${detail(active)}</aside>` : ''}</div>
+      <p class="live-disclaimer">Se consultan las últimas 50 entradas y 50 automatizaciones por cuenta. El resumen permite consultar 7, 30 o 90 días de envíos conservados.</p>`
     );
   }
   function automationPage() {
-    const items = rules();
+    const items = rules(),
+      posts = publications();
     return (
       header(
         'El mensaje correcto, en cada post.',
         'Configura lo que recibe una persona cuando comenta tu publicación.',
         '<button class="btn primary" data-live="new-rule">＋ Nueva automatización</button>',
       ) +
-      `<div class="live-info"><span>${liveIcon('arrow')}</span><div><strong>Primero una respuesta pública. Después, un mensaje privado.</strong><p>Se aplica a comentarios nuevos de otras cuentas en las publicaciones activas. Límite actual: 30 flujos nuevos por hora y cuenta. Las omisiones quedan registradas.</p></div></div><div class="live-rule-grid">${items.length ? items.map((r) => `<article class="live-rule-card"><div class="live-card-top"><span class="live-platform-label">${mark(r.channel)}${NETWORKS[r.channel]}</span>${badge(r.enabled ? 'Activa' : 'Pausada', r.enabled ? 'success' : 'neutral')}</div><h2>Publicación #${e(suffix(r.media_id).slice(-6))}</h2><p class="live-rule-account">${e(channels[r.connectionKey].account.username)}</p><div class="live-rule-preview"><div><span>01 · RESPUESTA PÚBLICA</span><p>${e(r.public_text)}</p></div><div><span>02 · MENSAJE PRIVADO</span><p>${e(r.dm_text)}</p></div></div><div class="live-rule-footer"><button class="btn" data-live="edit-rule" data-channel="${r.channel}" data-connection="${r.connectionKey}" data-media="${e(r.media_id)}">Editar mensajes</button><button class="live-link ${r.enabled ? 'pause' : ''}" data-live="toggle-rule" data-channel="${r.channel}" data-connection="${r.connectionKey}" data-media="${e(r.media_id)}">${r.enabled ? 'Ⅱ Pausar' : '▷ Activar'}</button></div><details class="live-identifiers"><summary>ID de publicación</summary><p>${e(r.media_id)}</p></details></article>`).join('') : empty('Tu primera automatización.', 'Vincula un canal y configura el ID de una publicación para empezar.')}</div><p class="live-disclaimer">Al guardar cambios o reactivar una regla, solo se procesan comentarios nuevos. Los pendientes de la configuración anterior se cancelan. Los fallidos no se reenvían. Una solicitud que ya esté en curso puede terminar después de pausar.</p>`
+      `<div class="live-info"><span>${liveIcon('arrow')}</span><div><strong>Primero una respuesta pública. Después, un mensaje privado.</strong><p>Se aplica a comentarios nuevos de otras cuentas en las publicaciones activas. Límite actual: 30 flujos nuevos por hora y cuenta. Las omisiones quedan registradas.</p></div></div><div class="live-rule-grid">${items.length ? items.map((r) => `<article class="live-rule-card"><div class="live-card-top"><span class="live-platform-label">${mark(r.channel)}${NETWORKS[r.channel]}</span>${badge(r.enabled ? 'Activa' : 'Pausada', r.enabled ? 'success' : 'neutral')}</div><h2>${e(posts.find((p) => p.connectionKey === r.connectionKey && p.id === r.media_id)?.title || 'Publicación #' + suffix(r.media_id).slice(-6))}</h2><p class="live-rule-account">${e(channels[r.connectionKey].account.username)}</p><div class="live-rule-preview"><div><span>01 · RESPUESTA PÚBLICA</span><p>${e(r.public_text)}</p></div><div><span>02 · MENSAJE PRIVADO</span><p>${e(r.dm_text)}</p></div></div><div class="live-rule-footer"><button class="btn" data-live="edit-rule" data-channel="${r.channel}" data-connection="${r.connectionKey}" data-media="${e(r.media_id)}">Editar mensajes</button><button class="live-link ${r.enabled ? 'pause' : ''}" data-live="toggle-rule" data-channel="${r.channel}" data-connection="${r.connectionKey}" data-media="${e(r.media_id)}">${r.enabled ? 'Ⅱ Pausar' : '▷ Activar'}</button></div><details class="live-identifiers"><summary>ID de publicación</summary><p>${e(r.media_id)}</p></details></article>`).join('') : empty('Tu primera automatización.', 'Vincula un canal y configura el ID de una publicación para empezar.')}</div><p class="live-disclaimer">Al guardar cambios o reactivar una regla, solo se procesan comentarios nuevos. Los pendientes de la configuración anterior se cancelan. Los fallidos no se reenvían. Una solicitud que ya esté en curso puede terminar después de pausar.</p>`
     );
   }
   function connectionsPage() {
@@ -531,7 +618,13 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
               request('/api/channel-accounts/' + key + '/automation?days=' + periodDays),
               request('/api/channel-accounts/' + key + '/events'),
             ]);
-            next[key] = { account, report, events };
+            next[key] = {
+              account,
+              report,
+              events,
+              publications: channels[key]?.publications,
+              publicationCheckedAt: channels[key]?.publicationCheckedAt,
+            };
           } catch {
             next[key] = { ...channels[key], account, error: true };
           }
@@ -539,7 +632,11 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
       );
       channels = next;
       const context = document.querySelector('.live-account-context strong');
-      if (context && catalogue.business) context.textContent = catalogue.business.name;
+      if (context && catalogue.business) {
+        context.textContent = catalogue.business.name;
+        const profileName = document.querySelector('.profile [data-profile-name]');
+        if (profileName) profileName.textContent = catalogue.business.name;
+      }
       try {
         oauthStatus = await request('/api/oauth/status');
         facebookPages = (await request('/api/oauth/facebook/pages')).pages || [];
@@ -557,13 +654,54 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
     loading = false;
     loadedAt = Date.now();
     render();
+    void loadPublicationMetadata();
+  }
+  async function loadPublicationMetadata() {
+    await Promise.all(
+      configured().map(async ([key, data]) => {
+        const maxAge = data.publications?.unavailable ? 60_000 : 300_000;
+        if (metadataLoading.has(key) || Date.now() - (data.publicationCheckedAt || 0) < maxAge)
+          return;
+        metadataLoading.add(key);
+        try {
+          const result = await request(accountBase(key) + '/publications', {
+            signal: AbortSignal.timeout(35_000),
+          });
+          if (channels[key]?.account.version !== data.account.version) return;
+          channels[key].publications = result;
+          channels[key].publicationCheckedAt = Date.now();
+        } catch {
+          if (channels[key]) {
+            channels[key].publications = { ...channels[key].publications, unavailable: true };
+            channels[key].publicationCheckedAt = Date.now();
+          }
+        } finally {
+          metadataLoading.delete(key);
+        }
+      }),
+    );
+    if (
+      !modal?.open &&
+      !customerModal?.open &&
+      !root.querySelector('input:focus,select:focus,textarea:focus')
+    )
+      render();
+  }
+  function publicationOptions(connectionKey) {
+    return (
+      '<option value="">Selecciona una publicación o pega su ID abajo</option>' +
+      publications()
+        .filter((p) => p.connectionKey === connectionKey && !p.rule)
+        .map((p) => `<option value="${e(p.id)}">${e(p.title)}</option>`)
+        .join('')
+    );
   }
   function closeEditor() {
     if (saving) return;
     modal?.close();
     editor = null;
   }
-  function openEditor(rule = null) {
+  function openEditor(rule = null, draft = null) {
     if (loading) return;
     const accounts = configured();
     if (!accounts.length) {
@@ -571,10 +709,13 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
       return;
     }
     editor = rule || {
-      connectionKey: accounts[0][0],
-      channel: networkFor(accounts[0][0]),
-      media_id: '',
-      public_text: '',
+      connectionKey: draft?.connectionKey || accounts[0][0],
+      channel: draft?.channel || networkFor(accounts[0][0]),
+      media_id: draft?.id || '',
+      public_text:
+        (draft?.channel || networkFor(accounts[0][0])) === 'facebook'
+          ? '{autor} Te mandé la información por Messenger.'
+          : 'Te mandé la información por privado.',
       dm_text: '',
       enabled: 1,
       version: null,
@@ -622,6 +763,7 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
             body: JSON.stringify(input),
           });
           channels[connectionKey].report = report;
+          channels[connectionKey].publicationCheckedAt = 0;
           channels[connectionKey].account.mode = report.rules.some((r) => r.enabled)
             ? 'comment-then-dm'
             : 'receive-only';
@@ -645,14 +787,75 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
         }
       });
     }
-    modal.innerHTML = `<form><div class="live-editor-head"><div><span class="live-eyebrow">COMENTARIO → MENSAJE PRIVADO</span><h2 id="live-editor-title">${rule ? 'Editar automatización' : 'Nueva automatización'}</h2></div><button type="button" class="icon-button" data-editor-close aria-label="Cerrar">✕</button></div><label class="field">Canal<select name="channel" ${rule ? 'disabled' : ''}>${accounts.map(([channel, c]) => `<option value="${channel}" ${channel === editor.connectionKey ? 'selected' : ''}>${NETWORKS[networkFor(channel)]} · ${e(c.account.username)}</option>`).join('')}</select></label><label class="field">ID de la publicación<input name="mediaId" value="${e(editor.media_id)}" ${rule ? 'readonly' : ''} required maxlength="92" pattern="[0-9]+(_[0-9]+){0,2}" placeholder="Pega el ID de la publicación"><small>Usa el ID de Meta, no el enlace. ${rule ? 'Para otra publicación, crea una automatización nueva.' : 'Facebook: ID de página_ID de publicación. Instagram: ID del contenido.'}</small></label><label class="field">01 · Respuesta pública<textarea name="publicText" required maxlength="1000" placeholder="Te mandé la información por privado.">${e(editor.public_text)}</textarea><small id="live-author-hint">En Facebook puedes usar {autor} para mencionar al autor del comentario.</small></label><label class="field">02 · Mensaje privado<textarea name="dmText" required maxlength="1000" placeholder="¡Hola! Aquí tienes la información…">${e(editor.dm_text)}</textarea></label><label class="field">Palabras clave, separadas por comas<input name="keywords" value="${e(JSON.parse(editor.keywords || '[]').join(', '))}" maxlength="1200" placeholder="precio, información, visita"><small>Déjalo vacío para responder a cualquier comentario elegible.</small></label><label class="field">Intervalo por persona y publicación (horas)<input name="cooldown" type="number" min="0" max="720" required value="${(editor.cooldown_seconds ?? 86400) / 3600}" step="1"><small>24 horas evita repetir el DM a la misma persona en el mismo post. 0 desactiva este control.</small></label><div class="live-editor-preview"><span>VISTA PREVIA</span><p id="live-public-preview"></p><span>DESPUÉS, POR PRIVADO</span><p id="live-dm-preview"></p></div><p class="live-disclaimer">${editor.enabled ? 'Al guardar, responderá a comentarios nuevos en esta publicación.' : 'La automatización se mantendrá pausada.'} El DM se solicita después de confirmar la respuesta pública.</p><p class="live-form-error" role="alert"></p><div class="live-editor-actions"><button type="button" class="btn" data-editor-close>Cancelar</button><button type="submit" class="btn primary">${rule ? 'Guardar cambios' : 'Guardar y activar'}</button></div></form>`;
+    modal.innerHTML = `<form>
+      <div class="live-editor-head">
+      <div>
+      <span class="live-eyebrow">COMENTARIO → MENSAJE PRIVADO</span>
+      <h2 id="live-editor-title">${rule ? 'Editar automatización' : 'Nueva automatización'}</h2>
+      </div>
+      <button type="button" class="icon-button" data-editor-close aria-label="Cerrar">✕</button>
+      </div>
+      <label class="field">Canal<select name="channel" ${rule ? 'disabled' : ''}>${accounts.map(([channel, c]) => `<option value="${channel}" ${channel === editor.connectionKey ? 'selected' : ''}>${NETWORKS[networkFor(channel)]} · ${e(c.account.username)}</option>`).join('')}</select>
+      </label>${
+        !rule
+          ? `<label class="field">Tus publicaciones<select name="publicationPick">${publicationOptions(editor.connectionKey)}</select>
+      <small>Se muestran publicaciones recientes accesibles en Meta. Puedes usar el ID para publicaciones anteriores.</small>
+      </label>`
+          : ''
+      }<label class="field">ID de la publicación<input name="mediaId" value="${e(editor.media_id)}" ${rule ? 'readonly' : ''} required maxlength="92" pattern="[0-9]+(_[0-9]+){0,2}" placeholder="Pega el ID de la publicación">
+      <small>Usa el ID de Meta, no el enlace. ${rule ? 'Para otra publicación, crea una automatización nueva.' : 'Facebook: ID de página_ID de publicación. Instagram: ID del contenido.'}</small>
+      </label>
+      <label class="field">01 · Respuesta pública<textarea name="publicText" required maxlength="1000" placeholder="Te mandé la información por privado.">${e(editor.public_text)}</textarea>
+      <small id="live-author-hint">En Facebook puedes usar {autor} para mencionar al autor del comentario.</small>
+      </label>
+      <label class="field">02 · Mensaje privado<textarea name="dmText" required maxlength="1000" placeholder="¡Hola! Aquí tienes la información…">${e(editor.dm_text)}</textarea>
+      </label>
+      <label class="field">Palabras clave, separadas por comas<input name="keywords" value="${e(JSON.parse(editor.keywords || '[]').join(', '))}" maxlength="1200" placeholder="precio, información, visita">
+      <small>Déjalo vacío para responder a cualquier comentario elegible.</small>
+      </label>
+      <label class="field">Intervalo por persona y publicación (horas)<input name="cooldown" type="number" min="0" max="720" required value="${(editor.cooldown_seconds ?? 86400) / 3600}" step="1">
+      <small>24 horas evita repetir el DM a la misma persona en el mismo post. 0 desactiva este control.</small>
+      </label>
+      <div class="live-editor-preview">
+      <span>VISTA PREVIA</span>
+      <p id="live-public-preview">
+      </p>
+      <span>DESPUÉS, POR PRIVADO</span>
+      <p id="live-dm-preview">
+      </p>
+      </div>
+      <p class="live-disclaimer">${editor.enabled ? 'Al guardar, responderá a comentarios nuevos en esta publicación.' : 'La automatización se mantendrá pausada.'} El DM se solicita después de confirmar la respuesta pública.</p>
+      <p class="live-form-error" role="alert">
+      </p>
+      <div class="live-editor-actions">
+      <button type="button" class="btn" data-editor-close>Cancelar</button>
+      <button type="submit" class="btn primary">${rule ? 'Guardar cambios' : 'Guardar y activar'}</button>
+      </div>
+      </form>`;
     previewEditor();
     modal.showModal();
   }
-  function previewEditor() {
+  function previewEditor(event) {
     if (!modal || !editor) return;
     const form = modal.querySelector('form'),
       channel = networkFor(form.elements.channel.value);
+    if (event?.target.name === 'channel') {
+      form.elements.mediaId.value = '';
+      if (
+        [
+          '{autor} Te mandé la información por Messenger.',
+          'Te mandé la información por privado.',
+        ].includes(form.elements.publicText.value)
+      )
+        form.elements.publicText.value =
+          channel === 'facebook'
+            ? '{autor} Te mandé la información por Messenger.'
+            : 'Te mandé la información por privado.';
+      const picker = form.elements.publicationPick;
+      if (picker) picker.innerHTML = publicationOptions(form.elements.channel.value);
+    }
+    if (event?.target.name === 'publicationPick' && event.target.value)
+      form.elements.mediaId.value = event.target.value;
     modal.querySelector('#live-public-preview').textContent =
       form.elements.publicText.value.replaceAll(
         '{autor}',
@@ -716,11 +919,36 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
     }
     if (action === 'detail') {
       selected = button.dataset.key;
+      threadClosed = false;
       if (current !== 'activity') navigate('activity');
       else render();
       root.querySelector('.live-detail')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
     if (action === 'new-rule') openEditor();
+    if (action === 'post-tab') {
+      postTab = button.dataset.tab;
+      selectedPost = null;
+      selected = null;
+      render();
+    }
+    if (action === 'close-thread') {
+      threadClosed = true;
+      selected = null;
+      render();
+    }
+    if (action === 'publication' || action === 'post-detail') {
+      selectedPost = button.dataset.post;
+      selected = button.dataset.key || null;
+      threadClosed = false;
+      render();
+      root
+        .querySelector('.conversation-thread')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    if (action === 'activate-post') {
+      const post = publications().find((p) => p.key === button.dataset.post);
+      if (post) openEditor(null, post);
+    }
     if (action === 'edit-rule')
       openEditor(
         rules().find(
@@ -767,7 +995,33 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
       }
     }
   });
+  root.addEventListener('keydown', (event) => {
+    const tab = event.target.closest('[data-live="post-tab"]');
+    if (!tab || !['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const tabs = ['active', 'paused', 'available'];
+    const offset = event.key === 'ArrowRight' ? 1 : -1;
+    postTab =
+      event.key === 'Home'
+        ? tabs[0]
+        : event.key === 'End'
+          ? tabs[2]
+          : tabs[(tabs.indexOf(postTab) + offset + tabs.length) % tabs.length];
+    selectedPost = null;
+    selected = null;
+    render();
+    root.querySelector('#publication-tab-' + postTab)?.focus();
+  });
   root.addEventListener('input', (event) => {
+    if (event.target.id === 'post-search') {
+      postQuery = event.target.value;
+      const start = event.target.selectionStart;
+      render();
+      const input = root.querySelector('#post-search');
+      input?.focus();
+      input?.setSelectionRange(start, start);
+      return;
+    }
     if (event.target.id !== 'live-search') return;
     query = event.target.value;
     root.querySelector('#live-results').innerHTML = activityTable(filteredActivity());
@@ -775,6 +1029,12 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
       `${filteredActivity().length} registros disponibles`;
   });
   root.addEventListener('change', (event) => {
+    if (event.target.id === 'post-channel') {
+      postChannel = event.target.value;
+      selectedPost = null;
+      render();
+      return;
+    }
     if (event.target.id === 'live-period') {
       periodDays = Number(event.target.value);
       void refresh();
@@ -791,6 +1051,17 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
       render();
     }
   });
+  root.addEventListener(
+    'error',
+    (event) => {
+      const image = event.target;
+      if (image.matches?.('[data-publication-image]')) {
+        image.closest('.post-photo')?.classList.remove('has-image');
+        image.hidden = true;
+      }
+    },
+    true,
+  );
   setInterval(() => {
     if (
       current &&
@@ -818,9 +1089,16 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
   }
   return {
     openActivity(item) {
+      threadClosed = false;
+      const connection = configured().find(
+        ([key, data]) =>
+          networkFor(key) === item.channel && data.account.accountId === item.account_id,
+      );
       selected = `${item.channel}:${item.account_id}:comment:${suffix(item.comment_id)}`;
       notificationActivity = {
         ...item,
+        connectionKey: connection?.[0],
+        accountName: connection?.[1].account.username,
         key: selected,
         kind: 'comment',
         author: 'Comentario de la comunidad',

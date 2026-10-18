@@ -12,6 +12,7 @@ import { createOAuth } from './oauth.mjs';
 import { createInvitations } from './invitations.mjs';
 import { readBackupStatus } from './offsite-backup.mjs';
 import { createCredentialMaintenance } from './credential-maintenance.mjs';
+import { createPublicationCatalogue } from './publication-catalogue.mjs';
 
 export function makeServer({
   store,
@@ -23,6 +24,7 @@ export function makeServer({
   registry = null,
   oauth = null,
   operations = null,
+  publications = createPublicationCatalogue(),
 }) {
   const allowedOrigin = new URL(origin).origin;
   const invitations = registry
@@ -281,12 +283,18 @@ export function makeServer({
           business: registry.business(user.id),
         });
       const accountRoute =
-        /^\/api\/channel-accounts\/([a-f0-9-]{36})(?:\/(automation|events))?$/.exec(path);
+        /^\/api\/channel-accounts\/([a-f0-9-]{36})(?:\/(automation|events|publications))?$/.exec(
+          path,
+        );
       if (registry && accountRoute) {
         const input = req.method === 'PUT' ? await body(req, 12000) : null;
         const config = registry.get(accountRoute[1], user.id);
         if (!config) return send(res, 404, { error: 'Cuenta no disponible.' });
         const queue = config.channel === 'facebook' ? facebookAutomation : automation;
+        if (req.method === 'GET' && accountRoute[2] === 'publications') {
+          const rules = queue?.panelReport(config.ownerId, config.accountId).rules || [];
+          return send(res, 200, await publications.get(config, rules));
+        }
         if (req.method === 'GET' && !accountRoute[2]) return send(res, 200, metadata(config));
         if (req.method === 'GET' && accountRoute[2] === 'events')
           return send(res, 200, {
