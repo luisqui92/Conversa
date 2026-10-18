@@ -73,7 +73,7 @@ La identidad de recuperación debe tener `roles/storage.objectViewer` en el buck
 
 ## Programar la copia en la VM
 
-Después de fusionar y desplegar el PR, la imagen debe incluir `backend/offsite-backup.mjs`. El host necesita Docker, `gcloud` y `flock`. La tarea usa la cuenta de servicio de la VM a través de `gcloud`; no contiene un token de acceso fijo.
+Después de fusionar y desplegar el PR, la imagen debe incluir `backend/offsite-backup.mjs`. El host necesita Docker y `flock`. La tarea obtiene una autorización temporal desde el servidor de metadatos de la VM y usa la API de inserción de Cloud Storage; no requiere `gcloud` en el host ni un token fijo. No hace GET/HEAD/listado de objetos: `roles/storage.objectCreator` es suficiente. `gcloud storage cp` no se utiliza para la carga porque puede inspeccionar el objeto de destino y pedir `storage.objects.get`.
 
 Crea `/etc/conversa-backup.conf` como root con modo `600`. Contiene solo referencias y la huella, no secretos. Sustituye VERSION por un número y HUELLA por los 64 caracteres verificados:
 
@@ -105,7 +105,7 @@ sudo systemctl enable --now conversa-backup.timer
 sudo systemctl list-timers conversa-backup.timer
 ```
 
-El timer ejecuta diariamente a las 06:30 UTC, **02:30 de Bolivia**, con hasta diez minutos de variación. La copia de SQLite usa su API de backup, no copia el archivo activo con `cp`. La copia resultante no depende del WAL/SHM del servidor. Publica primero SQLite y finalmente el manifiesto como marcador de finalización. Usa nombres únicos y `if-generation-match=0`, sin sobrescribir objetos anteriores.
+El timer ejecuta diariamente a las 06:30 UTC, **02:30 de Bolivia**, con hasta diez minutos de variación. La copia de SQLite usa su API de backup, no copia el archivo activo con `cp`. La copia resultante no depende del WAL/SHM del servidor. Publica primero SQLite y finalmente el manifiesto como marcador de finalización. Usa nombres únicos y la precondición API `ifGenerationMatch=0`, sin sobrescribir objetos anteriores.
 
 El panel solo muestra una copia externa reciente cuando se completaron ambas cargas hace menos de 36 horas y no se registró un fallo posterior. Eso **no certifica una prueba de recuperación ni verifica por sí solo el estado del timer**. Revisa también:
 
