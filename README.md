@@ -18,7 +18,7 @@ El código de autorización está implementado, pero **atender clientes externos
 
 Usa la [guía multicliente](docs/operacion/multicliente.md). El script `sudo bash deploy-vm.sh` conserva el proyecto Compose `conversa-demo` y su volumen de datos, detiene el worker antes de migrar y guarda un respaldo previo. Importa las conexiones piloto existentes sin volver a introducir sus tokens.
 
-La copia de migración permanece en el mismo disco: **el respaldo fuera de la VM y la monitorización externa siguen pendientes de configuración**. El panel muestra esa limitación al administrador. Guarda tanto los datos como la llave antes de incorporar información comercial.
+La copia de migración permanece en el mismo disco: **el respaldo fuera de la VM y la monitorización externa siguen pendientes de configuración**. El panel muestra esa limitación al administrador. Sigue el [procedimiento de respaldo externo y restauración](docs/operacion/respaldos.md): bucket para SQLite y Secret Manager para la llave, con permisos separados.
 
 Las guías antiguas de conexión por SSH se mantienen como referencia de diagnóstico del piloto. La guía multicliente es la referencia para esta versión. No ejecutar `docker compose down -v` ni borrar los volúmenes.
 

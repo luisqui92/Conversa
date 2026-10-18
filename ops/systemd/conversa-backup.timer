@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Conversa offsite backup
+
+[Timer]
+OnCalendar=*-*-* 06:30:00 UTC
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

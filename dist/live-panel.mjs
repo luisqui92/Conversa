@@ -349,7 +349,11 @@ export function createLivePanel({ root, toast, navigate, serverMode, user = {} }
           '',
         )}</div><div class="live-section-title"><h2>Negocios</h2><span>Crear acceso → conectar canales → activar publicaciones</span></div>
       <div class="live-table-wrap"><table class="live-table"><thead><tr><th>Negocio</th><th>Correo de acceso</th><th>Cuentas conectadas</th><th>Estado</th></tr></thead><tbody>${customers.map((c) => `<tr><td><strong>${e(c.name)}</strong></td><td>${e(c.email)}</td><td>${c.accounts}</td><td>${c.invitationPending ? `<button class="btn" data-invite-owner="${e(c.owner_id)}">Renovar invitación</button>` : badge(c.accounts ? 'Canales configurados' : 'Pendiente de conexión', c.accounts ? 'success' : 'neutral')}</td></tr>`).join('')}</tbody></table></div>
-      <div class="live-health notice"><strong>Respaldo externo pendiente</strong><p>La migración conserva una copia local. Antes de incorporar datos comerciales, configura y comprueba una copia fuera de la VM que incluya la base y la llave de recuperación.</p></div>
+      <div class="live-health notice">
+        <strong>${operationStatus?.externalBackupConfigured ? 'Copia externa reciente' : 'Respaldo externo pendiente de revisión'}</strong>
+        <p>${operationStatus?.backup?.lastSuccess ? 'Última copia completada: ' + date(operationStatus.backup.lastSuccess) + '. ' : ''}La base se respalda en un bucket privado y la llave se recupera por separado desde Secret Manager. Comprueba y registra también una restauración aislada.</p>
+        ${operationStatus?.backup?.error ? `<p>${e(operationStatus.backup.error)}</p>` : ''}
+      </div>
       ${operationStatus?.workers?.length ? `<section class="live-process-card"><h2>Estado de los procesos</h2>${operationStatus.workers.map((w) => `<p>${e(NETWORKS[w.channel])} · Última actividad: ${date(w.lastTick)}${w.lastError ? ' · Último error interno: ' + date(w.lastError) : ''}</p>`).join('')}</section>` : ''}`
     );
   }
