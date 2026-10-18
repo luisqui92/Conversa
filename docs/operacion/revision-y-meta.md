@@ -4,7 +4,7 @@
 
 Usar una rama y un PR por problema concreto: por ejemplo, enrutamiento de webhooks, invitaciones o respaldo. Evitar mezclar refactorizaciones generales o reformatear todo el repositorio con una función nueva. La descripción debe explicar un caso antes/después, pruebas realizadas y límites pendientes. Revisar el diff y esperar CI verde antes de fusionar. No desplegar una rama pendiente de revisión sobre los datos de clientes.
 
-Los PR de esta revisión son independientes sobre la misma versión. Se deben probar juntos antes de publicar: distintos cambios en `server.mjs`, el panel o las guías pueden necesitar resolución de conflictos. Los ejemplos con datos sintéticos no acreditan permisos ni funcionamiento real de Meta o Google Cloud.
+El PR de respaldo se apoya en el de invitaciones para conservar ambos cambios en el panel y el servidor. Fusionar primero invitaciones, retargetear respaldo a `main` y exigir CI verde nuevamente. El PR de webhooks se puede revisar por separado; la documentación se incorpora después del respaldo. Se probaron juntos localmente antes de publicar. Los ejemplos con datos sintéticos no acreditan permisos ni funcionamiento real de Meta o Google Cloud.
 
 La ejecución de GitHub Actions por sí sola no impide un push directo a `main`. Un administrador de GitHub debe configurar **Settings → Rules → Rulesets**, o la protección de ramas si esa es la opción disponible:
 
